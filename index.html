@@ -1,0 +1,633 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Happy Mother's Day 🌸</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=Nunito:wght@400;600;700&display=swap" rel="stylesheet"/>
+<style>
+:root{--mint:#d4f5e9;--mint2:#a8e6cf;--green:#2ecc71;--green-dark:#1a9e52}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Nunito',sans-serif;background:linear-gradient(135deg,#e8f8f0,#d4f5e9,#c8f0e8);min-height:100vh;overflow-x:hidden}
+#setup-screen{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:2rem;background:linear-gradient(135deg,#fff9fe,#f0fff8)}
+.setup-card{background:white;border-radius:24px;padding:2.5rem;max-width:700px;width:100%;box-shadow:0 20px 60px rgba(46,204,113,.12);border:1.5px solid #d4f5e9}
+.setup-card h1{font-family:'Playfair Display',serif;font-size:2rem;color:var(--green-dark);margin-bottom:.3rem;text-align:center}
+.tagline{text-align:center;color:#888;margin-bottom:2rem;font-size:.95rem}
+.setup-section{background:#f8fff8;border-radius:16px;padding:1.5rem;margin-bottom:1.5rem;border:1px solid #d4f5e9}
+.setup-section h2{font-size:1rem;font-weight:700;color:var(--green-dark);margin-bottom:1rem;display:flex;align-items:center;gap:8px}
+.field-row{display:flex;flex-direction:column;gap:.5rem;margin-bottom:1rem}
+.field-row:last-child{margin-bottom:0}
+.field-row label{font-size:.85rem;font-weight:700;color:#555}
+.field-row input,.field-row textarea{border:1.5px solid #d4f5e9;border-radius:10px;padding:.6rem .9rem;font-family:'Nunito',sans-serif;font-size:.95rem;color:#333;outline:none;transition:border-color .2s;width:100%}
+.field-row input:focus,.field-row textarea:focus{border-color:var(--green)}
+.field-row textarea{resize:vertical;min-height:70px}
+.music-options{display:flex;flex-direction:column;gap:.6rem}
+.music-choice{display:flex;align-items:flex-start;gap:10px;padding:.75rem 1rem;border:1.5px solid #d4f5e9;border-radius:12px;cursor:pointer;transition:background .2s}
+.music-choice:hover{background:#f0fff8}
+.music-choice input[type=radio]{accent-color:var(--green);width:16px;height:16px;margin-top:3px;cursor:pointer;flex-shrink:0}
+.music-choice-label{font-size:.9rem;font-weight:700;color:#444}
+.music-choice-desc{font-size:.78rem;color:#888;margin-top:2px}
+.img-upload-label{display:flex;align-items:center;gap:8px;background:#f0fff8;border:1.5px dashed var(--mint2);border-radius:8px;padding:.5rem .75rem;cursor:pointer;font-size:.82rem;color:var(--green-dark);font-weight:600;transition:background .2s}
+.img-upload-label:hover{background:#d4f5e9}
+.img-upload-label input[type=file]{display:none}
+.img-preview{width:100%;height:80px;object-fit:cover;border-radius:8px;margin-top:.5rem;display:none}
+.balloon-slots{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:1rem}
+.balloon-slot{background:white;border:1.5px dashed var(--mint2);border-radius:14px;padding:1rem}
+.slot-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:.75rem}
+.slot-header-left{display:flex;align-items:center;gap:8px;font-weight:700;font-size:.85rem;color:#666}
+.balloon-dot{width:20px;height:20px;border-radius:50%;flex-shrink:0}
+.remove-btn{background:none;border:none;cursor:pointer;font-size:1rem;color:#ccc;transition:color .2s}
+.remove-btn:hover{color:#e74c3c}
+.balloon-slot input,.balloon-slot textarea{border:1px solid #e0e0e0;border-radius:8px;padding:.5rem .75rem;font-family:'Nunito',sans-serif;font-size:.85rem;color:#333;outline:none;width:100%;margin-bottom:.5rem;transition:border-color .2s}
+.balloon-slot input:focus,.balloon-slot textarea:focus{border-color:var(--green)}
+.balloon-slot textarea{resize:none;height:60px}
+.add-btn{width:100%;padding:.75rem;background:transparent;border:2px dashed var(--mint2);border-radius:14px;color:var(--green-dark);font-family:'Nunito',sans-serif;font-size:.95rem;font-weight:700;cursor:pointer;transition:background .2s,border-color .2s;margin-top:.5rem}
+.add-btn:hover{background:#f0fff8;border-color:var(--green)}
+.launch-btn{width:100%;padding:1rem;background:linear-gradient(135deg,var(--green),var(--green-dark));color:white;border:none;border-radius:14px;font-family:'Nunito',sans-serif;font-size:1.1rem;font-weight:700;cursor:pointer;transition:transform .15s,box-shadow .2s;box-shadow:0 6px 20px rgba(46,204,113,.35)}
+.launch-btn:hover:not(:disabled){transform:translateY(-2px);box-shadow:0 10px 30px rgba(46,204,113,.45)}
+.launch-btn:disabled{opacity:.6;cursor:not-allowed}
+
+/* SHARE OVERLAY */
+#share-overlay{position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;align-items:center;justify-content:center;z-index:300;padding:1rem}
+.share-card{background:white;border-radius:24px;padding:2rem;max-width:480px;width:100%;text-align:center;box-shadow:0 30px 80px rgba(0,0,0,.25);animation:card-pop .4s cubic-bezier(.34,1.56,.64,1) both}
+.share-card h2{font-family:'Playfair Display',serif;font-size:1.6rem;color:var(--green-dark);margin-bottom:.5rem}
+.share-card p{color:#777;font-size:.9rem;margin-bottom:1.2rem;line-height:1.6}
+.share-link-row{display:flex;gap:.5rem;margin-bottom:1rem;align-items:center}
+.share-link-input{flex:1;border:1.5px solid var(--mint2);border-radius:10px;padding:.65rem .9rem;font-family:monospace;font-size:.82rem;color:#333;outline:none;background:#f8fff8;min-width:0}
+.copy-btn{background:linear-gradient(135deg,var(--green),var(--green-dark));color:white;border:none;border-radius:10px;padding:.65rem 1.1rem;font-family:'Nunito',sans-serif;font-size:.88rem;font-weight:700;cursor:pointer;white-space:nowrap;transition:transform .15s}
+.copy-btn:hover{transform:translateY(-1px)}
+.share-actions{display:flex;gap:.75rem;justify-content:center;flex-wrap:wrap}
+.share-preview-btn{background:white;color:var(--green-dark);border:2px solid var(--green);border-radius:10px;padding:.7rem 1.5rem;font-family:'Nunito',sans-serif;font-size:.95rem;font-weight:700;cursor:pointer;transition:background .2s}
+.share-preview-btn:hover{background:#f0fff8}
+.share-close-btn{background:#f0f0f0;color:#666;border:none;border-radius:10px;padding:.7rem 1.2rem;font-family:'Nunito',sans-serif;font-size:.95rem;font-weight:700;cursor:pointer}
+.copy-feedback{font-size:.85rem;color:var(--green);font-weight:700;margin-top:.6rem;height:1.2em}
+
+/* LOADING */
+#loading-screen{position:fixed;inset:0;background:linear-gradient(135deg,#e8f8f0,#d4f5e9);display:none;align-items:center;justify-content:center;flex-direction:column;z-index:999}
+.loading-flower{font-size:3rem;animation:spin-flower 1.5s linear infinite}
+@keyframes spin-flower{to{transform:rotate(360deg)}}
+.loading-text{font-family:'Playfair Display',serif;color:var(--green-dark);font-size:1.2rem;margin-top:1rem}
+
+/* APP */
+#app{display:none;min-height:100vh;position:relative}
+.petal{position:fixed;pointer-events:none;font-size:1.1rem;opacity:.22;animation:petal-fall linear infinite;z-index:0}
+@keyframes petal-fall{0%{transform:translateY(-60px) rotate(0deg);opacity:0}10%{opacity:.22}90%{opacity:.22}100%{transform:translateY(110vh) rotate(720deg);opacity:0}}
+#music-bar{position:fixed;bottom:16px;right:16px;background:rgba(255,255,255,.93);border:1.5px solid #d4f5e9;border-radius:50px;padding:.45rem 1rem;display:none;align-items:center;gap:10px;z-index:90;box-shadow:0 4px 16px rgba(0,0,0,.1);font-size:.82rem;color:#444;font-weight:600}
+.note-icon{font-size:1.1rem;animation:note-pulse 1.2s ease-in-out infinite alternate}
+@keyframes note-pulse{from{transform:scale(1)}to{transform:scale(1.3)}}
+#music-toggle{background:none;border:none;cursor:pointer;font-size:1.2rem;padding:0;line-height:1}
+#queen-screen{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:2rem;position:relative;z-index:1}
+.queen-title{font-family:'Playfair Display',serif;font-size:clamp(1.8rem,5vw,2.8rem);color:var(--green-dark);font-weight:700;margin-bottom:2rem;text-align:center;animation:slide-down .8s cubic-bezier(.34,1.56,.64,1) both}
+@keyframes slide-down{from{opacity:0;transform:translateY(-30px)}to{opacity:1;transform:translateY(0)}}
+.queen-photo-wrap{position:relative;margin-bottom:1.5rem;animation:pop-up .8s .3s cubic-bezier(.34,1.56,.64,1) both}
+@keyframes pop-up{from{opacity:0;transform:scale(.5)}to{opacity:1;transform:scale(1)}}
+.queen-crown{position:absolute;top:-40px;left:50%;transform:translateX(-50%);font-size:3rem;z-index:2;animation:crown-bounce 2s ease-in-out infinite alternate}
+@keyframes crown-bounce{from{transform:translateX(-50%) translateY(0)}to{transform:translateX(-50%) translateY(-8px)}}
+.queen-photo-circle{width:160px;height:160px;border-radius:50%;border:5px solid white;box-shadow:0 8px 32px rgba(46,204,113,.25);object-fit:cover;display:block}
+.queen-photo-placeholder{width:160px;height:160px;border-radius:50%;border:5px solid white;background:linear-gradient(135deg,var(--mint),var(--mint2));display:flex;align-items:center;justify-content:center;font-size:4rem;box-shadow:0 8px 32px rgba(46,204,113,.25)}
+.queen-badge{background:white;border-radius:30px;padding:.65rem 1.5rem;font-family:'Playfair Display',serif;font-size:1.2rem;font-weight:700;color:#333;box-shadow:0 4px 16px rgba(0,0,0,.08);margin-bottom:1rem;animation:pop-up .7s .5s cubic-bezier(.34,1.56,.64,1) both}
+.queen-subtitle{text-align:center;color:#666;max-width:360px;line-height:1.6;margin-bottom:2rem;animation:pop-up .7s .7s cubic-bezier(.34,1.56,.64,1) both}
+.start-btn{background:linear-gradient(135deg,var(--green),var(--green-dark));color:white;border:none;border-radius:50px;padding:.85rem 2.5rem;font-family:'Nunito',sans-serif;font-size:1.1rem;font-weight:700;cursor:pointer;box-shadow:0 6px 20px rgba(46,204,113,.4);transition:transform .15s,box-shadow .2s;animation:pop-up .7s .9s cubic-bezier(.34,1.56,.64,1) both}
+.start-btn:hover{transform:translateY(-3px);box-shadow:0 10px 30px rgba(46,204,113,.5)}
+#balloon-screen{display:none;min-height:100vh;flex-direction:column;align-items:center;padding:1.5rem;position:relative;z-index:1}
+.balloon-title{font-family:'Playfair Display',serif;font-size:clamp(1.4rem,4vw,2rem);color:var(--green-dark);font-weight:700;text-align:center;margin-bottom:.4rem}
+.remaining{color:#888;font-size:.95rem;text-align:center;margin-bottom:1.5rem}
+#balloon-field{position:relative;width:100%;max-width:920px;height:520px;margin:0 auto}
+.balloon-wrap{position:absolute;cursor:pointer;display:flex;flex-direction:column;align-items:center;animation:float-balloon ease-in-out infinite alternate;user-select:none}
+.balloon-wrap:hover{filter:brightness(1.1) drop-shadow(0 6px 14px rgba(0,0,0,.2))}
+@keyframes float-balloon{from{transform:translateY(0)}to{transform:translateY(-18px)}}
+.balloon-svg{width:68px;height:88px}
+.balloon-string{width:1px;height:30px;background:#bbb;margin-top:-2px}
+.balloon-wrap.popped{animation:balloon-pop .35s forwards !important;pointer-events:none}
+@keyframes balloon-pop{0%{transform:scale(1);opacity:1}45%{transform:scale(1.7);opacity:.6}100%{transform:scale(0);opacity:0}}
+#reveal-modal{position:fixed;inset:0;background:rgba(0,0,0,.45);display:none;align-items:center;justify-content:center;z-index:100;padding:1rem}
+.modal-card{background:white;border-radius:20px;padding:1.5rem;max-width:380px;width:100%;text-align:center;position:relative;animation:card-pop .4s cubic-bezier(.34,1.56,.64,1) both;box-shadow:0 20px 60px rgba(0,0,0,.2)}
+@keyframes card-pop{from{opacity:0;transform:scale(.6) translateY(40px)}to{opacity:1;transform:scale(1) translateY(0)}}
+.modal-close{position:absolute;top:12px;right:14px;background:none;border:none;font-size:1.2rem;cursor:pointer;color:#888}
+.modal-photo{width:100%;border-radius:12px;margin-bottom:1rem;max-height:240px;object-fit:cover;display:block}
+.modal-photo-placeholder{width:100%;height:160px;border-radius:12px;background:linear-gradient(135deg,var(--mint),#f8c8a0);display:flex;align-items:center;justify-content:center;font-size:3rem;margin-bottom:1rem}
+.modal-msg{font-size:1rem;color:#444;line-height:1.65;font-style:italic}
+.confetti-piece{position:fixed;pointer-events:none;border-radius:2px;animation:confetti-fall 1.3s ease-out forwards;z-index:200}
+@keyframes confetti-fall{0%{transform:translateY(0) rotate(0deg);opacity:1}100%{transform:translateY(340px) rotate(720deg);opacity:0}}
+#done-screen{display:none;min-height:100vh;align-items:center;justify-content:center;flex-direction:column;text-align:center;padding:2rem;position:relative;z-index:1}
+.done-title{font-family:'Playfair Display',serif;font-size:clamp(1.8rem,5vw,3rem);color:var(--green-dark);margin-bottom:1rem;animation:pop-up .8s cubic-bezier(.34,1.56,.64,1) both}
+.done-subtitle{color:#555;font-size:1.1rem;margin-bottom:2rem;animation:pop-up .8s .2s cubic-bezier(.34,1.56,.64,1) both}
+.done-hearts{font-size:3rem;animation:pop-up .8s .4s cubic-bezier(.34,1.56,.64,1) both}
+.nav-arrow{position:fixed;top:50%;transform:translateY(-50%);width:48px;height:48px;background:rgba(255,255,255,.85);border:none;border-radius:50%;font-size:1.3rem;cursor:pointer;box-shadow:0 4px 16px rgba(0,0,0,.12);z-index:50;display:none;align-items:center;justify-content:center;transition:background .2s;color:#555}
+.nav-arrow:hover{background:white}
+#nav-left{left:12px}#nav-right{right:12px}
+</style>
+</head>
+<body>
+
+<div id="loading-screen">
+  <div class="loading-flower">🌸</div>
+  <div class="loading-text" id="loading-text">Opening your surprise…</div>
+</div>
+
+<!-- SETUP -->
+<div id="setup-screen">
+  <div class="setup-card">
+    <h1>🌸 Build the Surprise</h1>
+    <p class="tagline">Customize everything, then get a real shareable link for Mom</p>
+
+    <div class="setup-section">
+      <h2>👑 Welcome Page</h2>
+      <div class="field-row">
+        <label>Mom's name</label>
+        <input id="cfg-name" type="text" value="Maa" maxlength="30"/>
+      </div>
+      <div class="field-row">
+        <label>Badge text</label>
+        <input id="cfg-badge" type="text" value="You're a Queen 👑" maxlength="50"/>
+      </div>
+      <div class="field-row">
+        <label>Subtitle message</label>
+        <textarea id="cfg-subtitle">I've prepared something special for you. Pop all the balloons on the next screen to uncover! 💕</textarea>
+      </div>
+      <div class="field-row">
+        <label>Mom's photo (optional)</label>
+        <label class="img-upload-label">
+          📷 Choose photo
+          <input type="file" id="cfg-photo" accept="image/*" onchange="previewPhoto(this,'cfg-photo-prev')"/>
+        </label>
+        <img id="cfg-photo-prev" class="img-preview" alt=""/>
+      </div>
+    </div>
+
+    <div class="setup-section">
+      <h2>🎵 Background Music</h2>
+      <div class="music-options">
+        <label class="music-choice">
+          <input type="radio" name="mc" value="default" checked/>
+          <div>
+            <div class="music-choice-label">🎶 Play default music</div>
+            <div class="music-choice-desc">A gentle cheerful melody plays automatically</div>
+          </div>
+        </label>
+        <label class="music-choice">
+          <input type="radio" name="mc" value="none"/>
+          <div>
+            <div class="music-choice-label">🔇 No music</div>
+            <div class="music-choice-desc">Only the balloon pop sound effect will play</div>
+          </div>
+        </label>
+      </div>
+    </div>
+
+    <div class="setup-section">
+      <h2>🎈 Balloon Surprises</h2>
+      <p style="font-size:.85rem;color:#888;margin-bottom:1rem">Each balloon hides a photo + message.</p>
+      <div class="balloon-slots" id="balloon-slots"></div>
+      <button class="add-btn" onclick="addSlot()">+ Add another balloon</button>
+    </div>
+
+    <button class="launch-btn" id="launch-btn" onclick="launchSurprise()">🔗 Generate Shareable Link</button>
+  </div>
+</div>
+
+<!-- SHARE OVERLAY -->
+<div id="share-overlay">
+  <div class="share-card">
+    <h2>🎉 Surprise is ready!</h2>
+    <p>Copy this link and send it to Mom via WhatsApp, SMS or email. She opens it in her browser — straight to the surprise! 💕</p>
+    <div class="share-link-row">
+      <input class="share-link-input" id="share-link-input" type="text" readonly/>
+      <button class="copy-btn" onclick="copyLink()">📋 Copy</button>
+    </div>
+    <div class="share-actions">
+      <button class="share-preview-btn" onclick="previewNow()">👀 Preview it</button>
+      <button class="share-close-btn" onclick="closeShareOverlay()">✕ Close</button>
+    </div>
+    <div class="copy-feedback" id="copy-feedback"></div>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="app">
+  <div id="petals-container"></div>
+  <button class="nav-arrow" id="nav-left" onclick="navigate(-1)">‹</button>
+  <button class="nav-arrow" id="nav-right" onclick="navigate(1)">›</button>
+  <div id="music-bar">
+    <span class="note-icon">🎵</span>
+    <span id="music-bar-label">Playing music</span>
+    <button id="music-toggle" onclick="toggleMusic()">⏸</button>
+  </div>
+  <div id="queen-screen">
+    <div class="queen-title" id="queen-title-el">Happy Mother's Day, Maa ✨</div>
+    <div class="queen-photo-wrap">
+      <div class="queen-crown">👑</div>
+      <div id="queen-photo-area"></div>
+    </div>
+    <div class="queen-badge" id="queen-badge-el">You're a Queen 👑</div>
+    <p class="queen-subtitle" id="queen-subtitle-el"></p>
+    <button class="start-btn" onclick="showBalloons()">Start the Magic ✨</button>
+  </div>
+  <div id="balloon-screen">
+    <div class="balloon-title" id="balloon-title-el">Pop the balloons! 🎈</div>
+    <div class="remaining" id="remaining-el"></div>
+    <div id="balloon-field"></div>
+  </div>
+  <div id="done-screen">
+    <div class="done-title">All surprises revealed! 🎉</div>
+    <div class="done-subtitle" id="done-subtitle-el">Thank you for everything, Mom. Love you always 💕</div>
+    <div class="done-hearts">💖 🌸 💜 🌺 💝</div>
+  </div>
+</div>
+
+<div id="reveal-modal" onclick="closeModal(event)">
+  <div class="modal-card">
+    <button class="modal-close" onclick="closeModal()">✕</button>
+    <div id="modal-photo-area"></div>
+    <p class="modal-msg" id="modal-msg-el"></p>
+  </div>
+</div>
+
+<script>
+// ─── JSONBin API key ───────────────────────────────────────────────────────
+// Get your FREE key at https://jsonbin.io → Sign Up → API Keys → Master Key
+// Replace the value below with your own key, then host this HTML file anywhere
+// (GitHub Pages, Netlify Drop, Google Drive public link, etc.)
+const JSONBIN_KEY = '$2a$10$REPLACEME_GET_FREE_KEY_AT_JSONBIN_IO';
+// ──────────────────────────────────────────────────────────────────────────
+
+const COLORS=[
+  {fill:'#f4a0a0'},{fill:'#f7c66a'},{fill:'#f891b8'},{fill:'#f0a490'},
+  {fill:'#c39bd3'},{fill:'#f8c8a0'},{fill:'#80cbc4'},{fill:'#a8d8ea'},
+  {fill:'#b5ead7'},{fill:'#ffd6d6'},{fill:'#d7bde2'},{fill:'#f9e79f'},
+  {fill:'#abebc6'},{fill:'#f1948a'},{fill:'#85c1e9'},
+];
+
+let slotCount=0,config={},poppedCount=0,totalBalloons=0,currentPage=1;
+let audioCtx=null,musicPaused=false,defaultLoopId=null,masterGainNode=null;
+
+/* ── CHECK URL ON LOAD ── */
+window.addEventListener('load',()=>{
+  const h=location.hash;
+  if(h&&h.startsWith('#bin=')) loadFromBin(h.slice(5));
+});
+
+async function loadFromBin(binId){
+  showLoading('Opening your surprise…');
+  try{
+    const res=await fetch(`https://api.jsonbin.io/v3/b/${binId}/latest`,{
+      headers:{'X-Access-Key':JSONBIN_KEY}
+    });
+    if(!res.ok) throw new Error('HTTP '+res.status);
+    const data=await res.json();
+    config=data.record;
+    totalBalloons=config.balloons.length;
+    poppedCount=0;
+    buildQueenScreen();buildBalloonField();buildPetals();
+    hideLoading();
+    document.getElementById('setup-screen').style.display='none';
+    document.getElementById('app').style.display='block';
+    document.getElementById('nav-left').style.display='flex';
+    document.getElementById('nav-right').style.display='flex';
+    document.addEventListener('click',()=>initMusic(),{once:true});
+  }catch(e){
+    hideLoading();
+    document.getElementById('setup-screen').style.display='flex';
+    alert('Could not load the surprise. The link may be expired or the API key needs to be set up.\n\nSee instructions inside the HTML file.');
+  }
+}
+
+function showLoading(msg){
+  document.getElementById('loading-text').textContent=msg||'Please wait…';
+  document.getElementById('loading-screen').style.display='flex';
+  document.getElementById('setup-screen').style.display='none';
+}
+function hideLoading(){document.getElementById('loading-screen').style.display='none';}
+
+/* ── SETUP ── */
+function color(i){return COLORS[i%COLORS.length];}
+
+function addSlot(){
+  const i=slotCount++;const c=color(i);
+  const container=document.getElementById('balloon-slots');
+  const div=document.createElement('div');
+  div.className='balloon-slot';div.id=`slot-${i}`;
+  div.innerHTML=`
+    <div class="slot-header">
+      <div class="slot-header-left">
+        <div class="balloon-dot" style="background:${c.fill}"></div>Balloon ${i+1}
+      </div>
+      <button class="remove-btn" onclick="removeSlot(${i})">✕</button>
+    </div>
+    <input type="text" id="slot-msg-${i}" placeholder="Write a message for Mom 💕"/>
+    <label class="img-upload-label">📷 Add photo
+      <input type="file" id="slot-img-${i}" accept="image/*" onchange="previewPhoto(this,'slot-prev-${i}')"/>
+    </label>
+    <img id="slot-prev-${i}" class="img-preview" alt=""/>`;
+  container.appendChild(div);
+}
+
+function removeSlot(i){const el=document.getElementById(`slot-${i}`);if(el)el.remove();}
+
+function previewPhoto(input,previewId){
+  const preview=document.getElementById(previewId);
+  if(input.files&&input.files[0]){
+    const r=new FileReader();
+    r.onload=e=>{preview.src=e.target.result;preview.style.display='block';};
+    r.readAsDataURL(input.files[0]);
+  }
+}
+
+/* Resize + compress images to keep payload small */
+function resizeImage(file,maxW=600,quality=0.72){
+  return new Promise(resolve=>{
+    const r=new FileReader();
+    r.onload=e=>{
+      const img=new Image();
+      img.onload=()=>{
+        let w=img.width,h=img.height;
+        if(w>maxW){h=Math.round(h*maxW/w);w=maxW;}
+        const canvas=document.createElement('canvas');
+        canvas.width=w;canvas.height=h;
+        canvas.getContext('2d').drawImage(img,0,0,w,h);
+        resolve(canvas.toDataURL('image/jpeg',quality));
+      };
+      img.src=e.target.result;
+    };
+    r.readAsDataURL(file);
+  });
+}
+
+/* ── LAUNCH ── */
+async function launchSurprise(){
+  if(JSONBIN_KEY.includes('REPLACEME')){
+    alert('⚠️ Please set up your free JSONBin API key first!\n\n1. Go to https://jsonbin.io and sign up (free)\n2. Go to Account → API Keys → copy your Master Key\n3. Open this HTML file in a text editor\n4. Replace the JSONBIN_KEY value near the top of the <script>\n5. Host the file on GitHub Pages or Netlify Drop\n\nThen it will work!');
+    return;
+  }
+
+  const btn=document.getElementById('launch-btn');
+  const name=document.getElementById('cfg-name').value.trim()||'Maa';
+  const badge=document.getElementById('cfg-badge').value.trim()||"You're a Queen 👑";
+  const sub=document.getElementById('cfg-subtitle').value.trim();
+  const mcVal=document.querySelector('input[name="mc"]:checked').value;
+
+  let queenPhoto=null;
+  const qf=document.getElementById('cfg-photo').files[0];
+  if(qf) queenPhoto=await resizeImage(qf,400,0.7);
+
+  const balloons=[];
+  for(let i=0;i<slotCount;i++){
+    const msgEl=document.getElementById(`slot-msg-${i}`);
+    const imgEl=document.getElementById(`slot-img-${i}`);
+    if(!msgEl) continue;
+    const msg=msgEl.value.trim();
+    let imgData=null;
+    if(imgEl&&imgEl.files[0]) imgData=await resizeImage(imgEl.files[0],600,0.72);
+    if(msg||imgData) balloons.push({msg,img:imgData,color:color(balloons.length)});
+  }
+
+  if(!balloons.length){alert('Please add at least one balloon message!');return;}
+
+  config={name,badge,sub,queenPhoto,balloons,musicChoice:mcVal};
+  btn.disabled=true;btn.textContent='⏳ Saving…';
+  showLoading('Saving your surprise…');
+
+  try{
+    const res=await fetch('https://api.jsonbin.io/v3/b',{
+      method:'POST',
+      headers:{
+        'Content-Type':'application/json',
+        'X-Master-Key':JSONBIN_KEY,
+        'X-Bin-Name':'mothers-day-surprise',
+        'X-Bin-Private':'false'
+      },
+      body:JSON.stringify(config)
+    });
+    if(!res.ok){const t=await res.text();throw new Error(t);}
+    const data=await res.json();
+    const binId=data.metadata.id;
+    const shareURL=`${location.href.split('#')[0]}#bin=${binId}`;
+    hideLoading();
+    btn.disabled=false;btn.textContent='🔗 Generate Shareable Link';
+    document.getElementById('share-link-input').value=shareURL;
+    document.getElementById('copy-feedback').textContent='';
+    document.getElementById('share-overlay').style.display='flex';
+  }catch(e){
+    hideLoading();
+    btn.disabled=false;btn.textContent='🔗 Generate Shareable Link';
+    alert('Could not save the surprise.\n\nError: '+e.message+'\n\nMake sure your JSONBin API key is correct and you have internet access.');
+  }
+}
+
+function copyLink(){
+  const val=document.getElementById('share-link-input').value;
+  navigator.clipboard.writeText(val).then(()=>{
+    document.getElementById('copy-feedback').textContent='✅ Copied! Send this link to Mom 💕';
+    setTimeout(()=>{document.getElementById('copy-feedback').textContent='';},4000);
+  }).catch(()=>{
+    document.getElementById('share-link-input').select();
+    document.execCommand('copy');
+    document.getElementById('copy-feedback').textContent='✅ Copied!';
+  });
+}
+
+function previewNow(){
+  closeShareOverlay();
+  totalBalloons=config.balloons.length;poppedCount=0;
+  buildQueenScreen();buildBalloonField();buildPetals();initMusic();
+  document.getElementById('setup-screen').style.display='none';
+  document.getElementById('app').style.display='block';
+  document.getElementById('nav-left').style.display='flex';
+  document.getElementById('nav-right').style.display='flex';
+}
+
+function closeShareOverlay(){document.getElementById('share-overlay').style.display='none';}
+
+/* ── QUEEN ── */
+function buildQueenScreen(){
+  document.getElementById('queen-title-el').textContent=`Happy Mother's Day, ${config.name} ✨`;
+  document.getElementById('queen-badge-el').textContent=config.badge;
+  document.getElementById('queen-subtitle-el').textContent=config.sub;
+  document.getElementById('balloon-title-el').textContent=`Pop the balloons, ${config.name}! 🎈`;
+  document.getElementById('done-subtitle-el').textContent=`Thank you for everything, ${config.name}. Love you always 💕`;
+  const area=document.getElementById('queen-photo-area');
+  area.innerHTML=config.queenPhoto
+    ?`<img src="${config.queenPhoto}" class="queen-photo-circle" alt="Mom"/>`
+    :`<div class="queen-photo-placeholder">🌸</div>`;
+}
+
+/* ── BALLOONS ── */
+function buildBalloonField(){
+  const field=document.getElementById('balloon-field');
+  field.innerHTML='';updateRemaining();
+  const pos=generatePositions(config.balloons.length);
+  config.balloons.forEach((b,i)=>{
+    const[lp,tp]=pos[i];
+    const wrap=document.createElement('div');
+    wrap.className='balloon-wrap';wrap.id=`balloon-${i}`;
+    wrap.style.cssText=`left:${lp}%;top:${tp}%;animation-duration:${(3+Math.random()*2.5).toFixed(2)}s;animation-delay:${(Math.random()*2).toFixed(2)}s`;
+    wrap.innerHTML=balloonSVG(b.color)+`<div class="balloon-string"></div>`;
+    wrap.onclick=()=>popBalloon(i,b,wrap);
+    field.appendChild(wrap);
+  });
+}
+
+function generatePositions(n){
+  const cols=Math.ceil(Math.sqrt(n*1.7)),rows=Math.ceil(n/cols),pos=[];
+  let idx=0;
+  for(let r=0;r<rows&&idx<n;r++)
+    for(let c=0;c<cols&&idx<n;c++,idx++){
+      const lp=5+(c/cols)*80+(Math.random()-.5)*(80/cols*.55);
+      const tp=3+(r/rows)*76+(Math.random()-.5)*(76/rows*.55);
+      pos.push([Math.max(2,Math.min(87,lp)),Math.max(2,Math.min(78,tp))]);
+    }
+  return pos;
+}
+
+function balloonSVG(c){
+  return`<svg class="balloon-svg" viewBox="0 0 70 90" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <ellipse cx="35" cy="36" rx="28" ry="34" fill="${c.fill}"/>
+    <ellipse cx="25" cy="23" rx="7" ry="9" fill="rgba(255,255,255,0.38)"/>
+    <path d="M35 70 C33 74 37 78 35 82" stroke="#bbb" stroke-width="1.5" stroke-linecap="round" fill="none"/>
+  </svg>`;
+}
+
+function updateRemaining(){
+  const left=totalBalloons-poppedCount;
+  document.getElementById('remaining-el').textContent=
+    left>0?`${left} surprise${left!==1?'s':''} remaining`:'All surprises found! 🎉';
+}
+
+function popBalloon(i,b,wrap){
+  wrap.classList.add('popped');poppedCount++;updateRemaining();
+  playPopSound();burstConfetti(wrap);
+  setTimeout(()=>showModal(b),230);
+  if(poppedCount===totalBalloons) setTimeout(showDone,3400);
+}
+
+/* ── SOUND ── */
+function getCtx(){if(!audioCtx)audioCtx=new(window.AudioContext||window.webkitAudioContext)();return audioCtx;}
+function playPopSound(){
+  try{
+    const ctx=getCtx(),bufSize=Math.floor(ctx.sampleRate*.15),buf=ctx.createBuffer(1,bufSize,ctx.sampleRate),data=buf.getChannelData(0);
+    for(let i=0;i<bufSize;i++)data[i]=(Math.random()*2-1)*Math.pow(1-i/bufSize,1.8);
+    const src=ctx.createBufferSource();src.buffer=buf;
+    const bp=ctx.createBiquadFilter();bp.type='bandpass';bp.frequency.value=900;bp.Q.value=.7;
+    const gn=ctx.createGain();gn.gain.setValueAtTime(1.8,ctx.currentTime);gn.gain.exponentialRampToValueAtTime(.001,ctx.currentTime+.15);
+    src.connect(bp);bp.connect(gn);gn.connect(ctx.destination);src.start();src.stop(ctx.currentTime+.16);
+  }catch(e){}
+}
+
+/* ── MUSIC ── */
+function initMusic(){
+  if(config.musicChoice==='none') return;
+  startDefaultMelody();
+  document.getElementById('music-bar-label').textContent='Background music';
+  document.getElementById('music-bar').style.display='flex';
+}
+function toggleMusic(){
+  const btn=document.getElementById('music-toggle');
+  if(!musicPaused){stopDefaultMelody();btn.textContent='▶';musicPaused=true;}
+  else{startDefaultMelody();btn.textContent='⏸';musicPaused=false;}
+}
+const MELODY=[
+  {f:523.25,t:0,d:.4},{f:587.33,t:.5,d:.4},{f:659.25,t:1,d:.4},{f:698.46,t:1.5,d:.4},
+  {f:783.99,t:2,d:.85},{f:659.25,t:3,d:.4},{f:587.33,t:3.5,d:.4},{f:523.25,t:4,d:.85},
+  {f:440,t:5,d:.4},{f:493.88,t:5.5,d:.4},{f:523.25,t:6,d:.4},{f:587.33,t:6.5,d:.4},
+  {f:659.25,t:7,d:.85},{f:587.33,t:8,d:.4},{f:523.25,t:8.5,d:.4},{f:493.88,t:9,d:.85},
+  {f:523.25,t:10,d:.4},{f:659.25,t:10.5,d:.4},{f:783.99,t:11,d:.4},{f:1046.5,t:11.5,d:1.1},
+  {f:880,t:13,d:.4},{f:783.99,t:13.5,d:.4},{f:659.25,t:14,d:.4},{f:523.25,t:14.5,d:1.4},
+];
+const LOOP_LEN=16.5;
+function startDefaultMelody(){
+  try{
+    const ctx=getCtx();
+    masterGainNode=ctx.createGain();masterGainNode.gain.value=.16;masterGainNode.connect(ctx.destination);
+    let offset=0;
+    function scheduleBar(){
+      MELODY.forEach(({f,t,d})=>{
+        const osc=ctx.createOscillator(),gn=ctx.createGain();
+        osc.type='sine';osc.frequency.value=f;
+        const s=ctx.currentTime+offset+t;
+        gn.gain.setValueAtTime(0,s);gn.gain.linearRampToValueAtTime(.85,s+.04);
+        gn.gain.setValueAtTime(.85,s+d-.06);gn.gain.linearRampToValueAtTime(0,s+d);
+        osc.connect(gn);gn.connect(masterGainNode);osc.start(s);osc.stop(s+d+.02);
+      });
+      offset+=LOOP_LEN;
+    }
+    scheduleBar();
+    defaultLoopId=setInterval(()=>{if(!musicPaused)scheduleBar();},LOOP_LEN*1000);
+  }catch(e){}
+}
+function stopDefaultMelody(){
+  if(defaultLoopId){clearInterval(defaultLoopId);defaultLoopId=null;}
+  if(masterGainNode)try{masterGainNode.gain.linearRampToValueAtTime(0,audioCtx.currentTime+.4);}catch(e){}
+}
+
+/* ── CONFETTI ── */
+function burstConfetti(wrap){
+  const r=wrap.getBoundingClientRect(),cx=r.left+r.width/2,cy=r.top+r.height/2;
+  const cs=['#f472b6','#a855f7','#fbbf24','#34d399','#60a5fa','#f87171','#f0a090'];
+  for(let j=0;j<24;j++){
+    const el=document.createElement('div');el.className='confetti-piece';
+    el.style.cssText=`left:${cx+(Math.random()-.5)*80}px;top:${cy}px;width:${5+Math.random()*7}px;height:${5+Math.random()*7}px;background:${cs[Math.floor(Math.random()*cs.length)]};transform:rotate(${Math.random()*360}deg);`;
+    document.body.appendChild(el);setTimeout(()=>el.remove(),1400);
+  }
+}
+function bigConfetti(){
+  const cs=['#f472b6','#a855f7','#fbbf24','#34d399','#60a5fa','#f87171'];
+  for(let j=0;j<80;j++){
+    setTimeout(()=>{
+      const el=document.createElement('div');el.className='confetti-piece';
+      el.style.cssText=`left:${Math.random()*100}vw;top:0;width:${5+Math.random()*9}px;height:${5+Math.random()*9}px;background:${cs[Math.floor(Math.random()*cs.length)]};animation-duration:${1.4+Math.random()*.8}s;`;
+      document.body.appendChild(el);setTimeout(()=>el.remove(),2600);
+    },j*50);
+  }
+}
+
+/* ── MODAL ── */
+function showModal(b){
+  document.getElementById('modal-photo-area').innerHTML=b.img
+    ?`<img src="${b.img}" class="modal-photo" alt="Memory"/>`
+    :`<div class="modal-photo-placeholder">🌸</div>`;
+  document.getElementById('modal-msg-el').textContent=b.msg||'';
+  document.getElementById('reveal-modal').style.display='flex';
+}
+function closeModal(e){
+  if(!e||e.target===document.getElementById('reveal-modal')||e.currentTarget.tagName==='BUTTON')
+    document.getElementById('reveal-modal').style.display='none';
+}
+
+/* ── NAV ── */
+function showBalloons(){
+  document.getElementById('queen-screen').style.display='none';
+  document.getElementById('balloon-screen').style.display='flex';
+  currentPage=2;
+}
+function showDone(){
+  document.getElementById('balloon-screen').style.display='none';
+  document.getElementById('done-screen').style.display='flex';
+  currentPage=3;bigConfetti();
+}
+function navigate(dir){
+  if(dir===1&&currentPage===1)showBalloons();
+  else if(dir===-1&&currentPage===2){
+    document.getElementById('balloon-screen').style.display='none';
+    document.getElementById('queen-screen').style.display='flex';
+    currentPage=1;
+  }
+}
+
+/* ── PETALS ── */
+function buildPetals(){
+  const c=document.getElementById('petals-container');c.innerHTML='';
+  const emojis=['🌸','🌺','✿','❀','🌷'];
+  for(let i=0;i<14;i++){
+    const p=document.createElement('div');p.className='petal';
+    p.textContent=emojis[Math.floor(Math.random()*emojis.length)];
+    p.style.left=Math.random()*100+'vw';
+    p.style.animationDuration=(6+Math.random()*8)+'s';
+    p.style.animationDelay=(Math.random()*6)+'s';
+    c.appendChild(p);
+  }
+}
+
+addSlot();addSlot();addSlot();
+</script>
+</body>
+</html>
