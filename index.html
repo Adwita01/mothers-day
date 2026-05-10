@@ -67,6 +67,8 @@ body{font-family:'Nunito',sans-serif;background:linear-gradient(135deg,#e8f8f0,#
 .loading-flower{font-size:3rem;animation:spin-flower 1.5s linear infinite}
 @keyframes spin-flower{to{transform:rotate(360deg)}}
 .loading-text{font-family:'Playfair Display',serif;color:var(--green-dark);font-size:1.2rem;margin-top:1rem}
+.loading-progress{width:220px;height:6px;background:#c8f0e8;border-radius:3px;margin-top:1rem;overflow:hidden}
+.loading-bar{height:100%;background:linear-gradient(90deg,var(--green),var(--green-dark));border-radius:3px;transition:width .4s ease;width:0%}
 
 /* APP */
 #app{display:none;min-height:100vh;position:relative}
@@ -137,6 +139,7 @@ input.crop-slider{width:100%;accent-color:var(--green);cursor:pointer;margin:0}
 <div id="loading-screen">
   <div class="loading-flower">🌸</div>
   <div class="loading-text" id="loading-text">Opening your surprise…</div>
+  <div class="loading-progress"><div class="loading-bar" id="loading-bar"></div></div>
 </div>
 
 <!-- SETUP -->
@@ -184,7 +187,7 @@ input.crop-slider{width:100%;accent-color:var(--green);cursor:pointer;margin:0}
             <input type="radio" name="mc" value="custom" onchange="onMusicChange()" style="margin-top:3px;accent-color:var(--green);width:16px;height:16px;cursor:pointer;flex-shrink:0"/>
             <div>
               <div class="music-choice-label">🎵 Upload my own song</div>
-              <div class="music-choice-desc">MP3, WAV or any audio file from your device</div>
+              <div class="music-choice-desc">MP3, WAV or any audio file — up to 50 MB with Supabase!</div>
             </div>
           </div>
           <div id="song-upload-area" style="display:none;width:100%;margin-top:.75rem;padding-left:26px">
@@ -193,9 +196,6 @@ input.crop-slider{width:100%;accent-color:var(--green);cursor:pointer;margin:0}
               <input type="file" id="cfg-song" accept="audio/*" onchange="onSongChosen(this)"/>
             </label>
             <div id="song-name-tag" style="font-size:.8rem;color:var(--green-dark);font-weight:600;display:none"></div>
-            <div style="font-size:.75rem;color:#e07000;margin-top:.4rem;background:#fff8ee;border-radius:6px;padding:.4rem .6rem">
-              ⚠️ Keep song file under <strong>3 MB</strong> for best results.
-            </div>
           </div>
         </label>
         <label class="music-choice">
@@ -210,7 +210,7 @@ input.crop-slider{width:100%;accent-color:var(--green);cursor:pointer;margin:0}
 
     <div class="setup-section">
       <h2>🎈 Balloon Surprises</h2>
-      <p style="font-size:.85rem;color:#888;margin-bottom:1rem">Each balloon hides a photo + message.</p>
+      <p style="font-size:.85rem;color:#888;margin-bottom:1rem">Each balloon hides a photo + message. Photos can be high quality — Supabase supports large files!</p>
       <div class="balloon-slots" id="balloon-slots"></div>
       <button class="add-btn" onclick="addSlot()">+ Add another balloon</button>
     </div>
@@ -312,35 +312,75 @@ input.crop-slider{width:100%;accent-color:var(--green);cursor:pointer;margin:0}
 </div>
 
 <script>
-/* ── CROP / ADJUST MODULE ── */
+// ═══════════════════════════════════════════════════════════════
+//  SUPABASE CONFIGURATION
+//  1. Go to https://supabase.com → create free project
+//  2. Go to Settings → API → copy Project URL + anon key
+//  3. Go to Storage → create a bucket named "surprises" (public)
+//  4. Paste your values below
+// ═══════════════════════════════════════════════════════════════
+const SUPABASE_URL   = 'https://YOUR_PROJECT_ID.supabase.co';
+const SUPABASE_ANON  = 'YOUR_ANON_KEY_HERE';
+const BUCKET         = 'surprises';
+// ═══════════════════════════════════════════════════════════════
+
+// ── Supabase helpers ──────────────────────────────────────────
+async function sbUploadJson(path, obj) {
+  const blob = new Blob([JSON.stringify(obj)], { type: 'application/json' });
+  const res = await fetch(`${SUPABASE_URL}/storage/v1/object/${BUCKET}/${path}`, {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${SUPABASE_ANON}`, 'Content-Type': 'application/json', 'x-upsert': 'true' },
+    body: blob,
+  });
+  if (!res.ok) { const t = await res.text(); throw new Error(t); }
+}
+
+async function sbUploadFile(path, blob, contentType) {
+  const res = await fetch(`${SUPABASE_URL}/storage/v1/object/${BUCKET}/${path}`, {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${SUPABASE_ANON}`, 'Content-Type': contentType, 'x-upsert': 'true' },
+    body: blob,
+  });
+  if (!res.ok) { const t = await res.text(); throw new Error(t); }
+}
+
+async function sbDownloadJson(path) {
+  const res = await fetch(`${SUPABASE_URL}/storage/v1/object/public/${BUCKET}/${path}`);
+  if (!res.ok) throw new Error('HTTP ' + res.status + ' — could not load ' + path);
+  return res.json();
+}
+
+// Public URL for media files (images / audio stored as files)
+function sbPublicUrl(path) {
+  return `${SUPABASE_URL}/storage/v1/object/public/${BUCKET}/${path}`;
+}
+
+// ── Unique session key so multiple surprises don't collide ───
+function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
+
+// ── Crop/adjust module ────────────────────────────────────────
 let _cropCallback=null,_cropPreviewId=null;
 let _cropScale=1,_cropX=0,_cropY=0;
 let _cropNatW=0,_cropNatH=0,_cropVpW=0,_cropVpH=0;
 let _dragStart=null,_dragOrigin=null;
-let _cropSrcDataUrl=null;
 
 function openCropModal(dataUrl, previewId, callback){
-  _cropCallback=callback;
-  _cropPreviewId=previewId;
-  _cropSrcDataUrl=dataUrl;
+  _cropCallback=callback; _cropPreviewId=previewId;
   const img=document.getElementById('crop-img');
   const vp=document.getElementById('crop-viewport');
   img.onload=()=>{
-    _cropNatW=img.naturalWidth;_cropNatH=img.naturalHeight;
-    _cropVpW=vp.clientWidth;_cropVpH=vp.clientHeight;
-    // Fit image to viewport initially
+    _cropNatW=img.naturalWidth; _cropNatH=img.naturalHeight;
+    _cropVpW=vp.clientWidth; _cropVpH=vp.clientHeight;
     const fitScale=Math.max(_cropVpW/_cropNatW,_cropVpH/_cropNatH);
     _cropScale=fitScale;
     document.getElementById('crop-zoom').value=Math.round(fitScale*100);
     document.getElementById('zoom-val').textContent=Math.round(fitScale*100)+'%';
-    // Center
     _cropX=(_cropVpW-_cropNatW*_cropScale)/2;
     _cropY=(_cropVpH-_cropNatH*_cropScale)/2;
     applyTransform();
   };
   img.src=dataUrl;
   document.getElementById('crop-modal').style.display='flex';
-  // Drag events
   const vp2=document.getElementById('crop-viewport');
   vp2.addEventListener('mousedown',startDrag);
   vp2.addEventListener('touchstart',startDragTouch,{passive:true});
@@ -353,97 +393,78 @@ function applyTransform(){
   img.style.left=_cropX+'px';
   img.style.top=_cropY+'px';
 }
-
 function clampPosition(){
   const iw=_cropNatW*_cropScale,ih=_cropNatH*_cropScale;
   _cropX=Math.min(0,Math.max(_cropVpW-iw,_cropX));
   _cropY=Math.min(0,Math.max(_cropVpH-ih,_cropY));
 }
-
 function onZoom(){
   const z=parseInt(document.getElementById('crop-zoom').value);
   document.getElementById('zoom-val').textContent=z+'%';
   const cx=_cropVpW/2,cy=_cropVpH/2;
-  const oldScale=_cropScale;
-  _cropScale=z/100;
+  const oldScale=_cropScale; _cropScale=z/100;
   _cropX=cx-(_cropNatW*_cropScale)*((cx-_cropX)/(_cropNatW*oldScale));
   _cropY=cy-(_cropNatH*_cropScale)*((cy-_cropY)/(_cropNatH*oldScale));
-  clampPosition();applyTransform();
+  clampPosition(); applyTransform();
 }
-
 function startDrag(e){
-  _dragStart={x:e.clientX,y:e.clientY};_dragOrigin={x:_cropX,y:_cropY};
-  window.addEventListener('mousemove',onDrag);window.addEventListener('mouseup',stopDrag);
+  _dragStart={x:e.clientX,y:e.clientY}; _dragOrigin={x:_cropX,y:_cropY};
+  window.addEventListener('mousemove',onDrag); window.addEventListener('mouseup',stopDrag);
 }
 function startDragTouch(e){
   const t=e.touches[0];
-  _dragStart={x:t.clientX,y:t.clientY};_dragOrigin={x:_cropX,y:_cropY};
+  _dragStart={x:t.clientX,y:t.clientY}; _dragOrigin={x:_cropX,y:_cropY};
   window.addEventListener('touchmove',onDragTouch,{passive:true});
   window.addEventListener('touchend',stopDragTouch);
 }
 function onDrag(e){
-  if(!_dragStart) return;
+  if(!_dragStart)return;
   _cropX=_dragOrigin.x+(e.clientX-_dragStart.x);
   _cropY=_dragOrigin.y+(e.clientY-_dragStart.y);
-  clampPosition();applyTransform();
+  clampPosition(); applyTransform();
 }
 function onDragTouch(e){
-  if(!_dragStart) return;
+  if(!_dragStart)return;
   const t=e.touches[0];
   _cropX=_dragOrigin.x+(t.clientX-_dragStart.x);
   _cropY=_dragOrigin.y+(t.clientY-_dragStart.y);
-  clampPosition();applyTransform();
+  clampPosition(); applyTransform();
 }
-function stopDrag(){_dragStart=null;window.removeEventListener('mousemove',onDrag);window.removeEventListener('mouseup',stopDrag);}
-function stopDragTouch(){_dragStart=null;window.removeEventListener('touchmove',onDragTouch);window.removeEventListener('touchend',stopDragTouch);}
+function stopDrag(){ _dragStart=null; window.removeEventListener('mousemove',onDrag); window.removeEventListener('mouseup',stopDrag); }
+function stopDragTouch(){ _dragStart=null; window.removeEventListener('touchmove',onDragTouch); window.removeEventListener('touchend',stopDragTouch); }
 
 function confirmCrop(){
   const vp=document.getElementById('crop-viewport');
-  const vpW=vp.clientWidth,vpH=vp.clientHeight;
-  // Output at max 400px wide to keep file size small
-  const maxOut=400;
+  const vpW=vp.clientWidth, vpH=vp.clientHeight;
+  // Higher quality than JSONBin version — 600px wide JPEG at 0.82
+  const maxOut=600;
   const scale=Math.min(1,maxOut/vpW);
-  const outW=Math.round(vpW*scale),outH=Math.round(vpH*scale);
+  const outW=Math.round(vpW*scale), outH=Math.round(vpH*scale);
   const canvas=document.createElement('canvas');
-  canvas.width=outW;canvas.height=outH;
+  canvas.width=outW; canvas.height=outH;
   const ctx=canvas.getContext('2d');
   ctx.scale(scale,scale);
   const img=document.getElementById('crop-img');
   ctx.drawImage(img,_cropX,_cropY,_cropNatW*_cropScale,_cropNatH*_cropScale);
-  // Compress iteratively until under 70KB
-  let quality=0.6;
-  let result=canvas.toDataURL('image/jpeg',quality);
-  while(result.length>70*1024*1.37&&quality>0.15){
-    quality-=0.08;
-    result=canvas.toDataURL('image/jpeg',quality);
-  }
+  const result=canvas.toDataURL('image/jpeg',0.82);
   if(_cropPreviewId){
     const prev=document.getElementById(_cropPreviewId);
-    if(prev){prev.src=result;prev.style.display='block';}
+    if(prev){prev.src=result; prev.style.display='block';}
   }
   if(_cropCallback) _cropCallback(result);
   closeCropModal();
 }
-
-function cancelCrop(){closeCropModal();}
-
+function cancelCrop(){ closeCropModal(); }
 function closeCropModal(){
   document.getElementById('crop-modal').style.display='none';
   const vp=document.getElementById('crop-viewport');
   vp.removeEventListener('mousedown',startDrag);
   vp.removeEventListener('touchstart',startDragTouch);
-  _cropCallback=null;_dragStart=null;
+  _cropCallback=null; _dragStart=null;
 }
 </script>
 
 <script>
-// ─── JSONBin API key ───────────────────────────────────────────────────────
-// Get your FREE key at https://jsonbin.io → Sign Up → API Keys → Master Key
-// Replace the value below with your own key, then host this HTML file anywhere
-// (GitHub Pages, Netlify Drop, Google Drive public link, etc.)
-const JSONBIN_KEY = '$2a$10$cEK2wQ/ke.B7cwZj1R4xLexye2FJzqtFWX2x1O.qh/Vt7gf4R3eea';
-// ──────────────────────────────────────────────────────────────────────────
-
 const COLORS=[
   {fill:'#f4a0a0'},{fill:'#f7c66a'},{fill:'#f891b8'},{fill:'#f0a490'},
   {fill:'#c39bd3'},{fill:'#f8c8a0'},{fill:'#80cbc4'},{fill:'#a8d8ea'},
@@ -451,192 +472,249 @@ const COLORS=[
   {fill:'#abebc6'},{fill:'#f1948a'},{fill:'#85c1e9'},
 ];
 
-let slotCount=0,config={},poppedCount=0,totalBalloons=0,currentPage=1;
-let audioCtx=null,musicPaused=false,defaultLoopId=null,masterGainNode=null;
+let slotCount=0, config={}, poppedCount=0, totalBalloons=0, currentPage=1;
+let audioCtx=null, musicPaused=false, defaultLoopId=null, masterGainNode=null;
 
-/* ── JSONBIN HELPERS ── */
-async function createBin(data, name){
-  const body=JSON.stringify(data);
-  const sizeKB=new Blob([body]).size/1024;
-  if(sizeKB>95) throw new Error(`"${name}" is ${sizeKB.toFixed(0)}KB — still over 100KB limit. Please use a smaller/simpler photo.`);
-  const res=await fetch('https://api.jsonbin.io/v3/b',{
-    method:'POST',
-    headers:{
-      'Content-Type':'application/json',
-      'X-Master-Key':JSONBIN_KEY,
-      'X-Bin-Name':name,
-      'X-Bin-Private':'false'
-    },
-    body:body
-  });
-  if(!res.ok){const t=await res.text();throw new Error(t);}
-  const d=await res.json();
-  return d.metadata.id;
+// ── Loading UI ──────────────────────────────────────────────
+function showLoading(msg, pct){
+  document.getElementById('loading-text').textContent = msg || 'Please wait…';
+  if(pct !== undefined) document.getElementById('loading-bar').style.width = pct + '%';
+  document.getElementById('loading-screen').style.display = 'flex';
+  document.getElementById('setup-screen').style.display = 'none';
 }
+function hideLoading(){ document.getElementById('loading-screen').style.display = 'none'; }
 
-async function fetchBin(binId){
-  const res=await fetch(`https://api.jsonbin.io/v3/b/${binId}/latest`,{
-    headers:{'X-Access-Key':JSONBIN_KEY}
-  });
-  if(!res.ok) throw new Error('HTTP '+res.status);
-  const d=await res.json();
-  return d.record;
-}
-
-/* ── LOAD: reassemble from index bin ── */
-window.addEventListener('load',()=>{
-  const h=location.hash;
-  if(h&&h.startsWith('#bin=')) loadFromBin(h.slice(5));
+// ── On load: check for #surprise= hash ──────────────────────
+window.addEventListener('load', () => {
+  const h = location.hash;
+  if (h && h.startsWith('#surprise=')) loadSurprise(h.slice(10));
 });
 
-async function loadFromBin(indexBinId){
-  showLoading('Opening your surprise… 🌸');
-  try{
-    // 1. Load index bin — contains {meta, balloonBins[], queenPhotoBin?, songBin?}
-    const index=await fetchBin(indexBinId);
+// ── LOAD surprise from Supabase ──────────────────────────────
+async function loadSurprise(sessionKey) {
+  if (SUPABASE_URL.includes('YOUR_PROJECT_ID')) {
+    alert('⚠️ This file has not been configured with Supabase credentials yet.\n\nPlease open the HTML in a text editor and fill in SUPABASE_URL and SUPABASE_ANON.');
+    return;
+  }
+  showLoading('Opening your surprise… 🌸', 5);
+  try {
+    // 1. Load index JSON
+    const index = await sbDownloadJson(`${sessionKey}/index.json`);
+    config = { ...index.meta, balloons: [], queenPhoto: null, songUrl: null };
 
-    // 2. Load meta (name, badge, sub, musicChoice)
-    config={...index.meta, balloons:[], queenPhoto:null, songData:null};
-
-    // 3. Load queenPhoto bin if exists
-    if(index.queenPhotoBin){
-      showLoading('Loading photos… 🌸');
-      const qd=await fetchBin(index.queenPhotoBin);
-      config.queenPhoto=qd.data;
+    // 2. Queen photo
+    if (index.hasQueenPhoto) {
+      showLoading('Loading your photo… 🌸', 20);
+      config.queenPhoto = sbPublicUrl(`${sessionKey}/queen-photo.jpg`);
     }
 
-    // 4. Load each balloon bin
-    const total=index.balloonBins.length;
-    for(let i=0;i<total;i++){
-      showLoading(`Loading balloon ${i+1} of ${total}… 🎈`);
-      const bd=await fetchBin(index.balloonBins[i]);
+    // 3. Balloons
+    const total = index.balloonCount;
+    for (let i = 0; i < total; i++) {
+      showLoading(`Loading balloon ${i+1} of ${total}… 🎈`, 20 + Math.round((i+1)/total * 60));
+      const bd = await sbDownloadJson(`${sessionKey}/balloon-${i}.json`);
+      // balloon photos are stored as files; replace placeholder with public URL
+      if (bd.hasPhoto) bd.img = sbPublicUrl(`${sessionKey}/balloon-${i}-photo.jpg`);
       config.balloons.push(bd);
     }
 
-    // 5. Load song bin if exists
-    if(index.songBin){
-      showLoading('Loading music… 🎵');
-      const sd=await fetchBin(index.songBin);
-      config.songData=sd.data;
+    // 4. Song URL (stream directly, no base64!)
+    if (index.hasSong) {
+      showLoading('Loading music… 🎵', 90);
+      config.songUrl = sbPublicUrl(`${sessionKey}/song`);
     }
 
-    totalBalloons=config.balloons.length;
-    poppedCount=0;
-    buildQueenScreen();buildBalloonField();buildPetals();
+    showLoading('Almost there… ✨', 98);
+    totalBalloons = config.balloons.length;
+    poppedCount = 0;
+    buildQueenScreen(); buildBalloonField(); buildPetals();
     hideLoading();
-    document.getElementById('setup-screen').style.display='none';
-    document.getElementById('app').style.display='block';
-    document.getElementById('nav-left').style.display='flex';
-    document.getElementById('nav-right').style.display='flex';
-    document.addEventListener('click',()=>initMusic(),{once:true});
-  }catch(e){
+    document.getElementById('setup-screen').style.display = 'none';
+    document.getElementById('app').style.display = 'block';
+    document.getElementById('nav-left').style.display = 'flex';
+    document.getElementById('nav-right').style.display = 'flex';
+    document.addEventListener('click', () => initMusic(), { once: true });
+  } catch(e) {
     hideLoading();
-    document.getElementById('setup-screen').style.display='flex';
-    alert('Could not load the surprise.\n\nError: '+e.message);
+    document.getElementById('setup-screen').style.display = 'flex';
+    alert('Could not load the surprise.\n\nError: ' + e.message + '\n\nMake sure your Supabase bucket is public and policies are set correctly.');
   }
 }
 
-/* ── LAUNCH: save each piece as its own bin ── */
-async function launchSurprise(){
-  if(JSONBIN_KEY.includes('REPLACEME')){
-    alert('⚠️ Please set up your free JSONBin API key first!\n\n1. Go to https://jsonbin.io and sign up (free)\n2. Go to Account → API Keys → copy your Master Key\n3. Open this HTML file in a text editor\n4. Replace the JSONBIN_KEY value near the top\n\nThen it will work!');
+// ── LAUNCH: save everything to Supabase Storage ─────────────
+async function launchSurprise() {
+  if (SUPABASE_URL.includes('YOUR_PROJECT_ID')) {
+    alert('⚠️ Please configure Supabase first!\n\n1. Go to https://supabase.com → create free project\n2. Create a public storage bucket named "surprises"\n3. Open this HTML file in a text editor\n4. Fill in SUPABASE_URL and SUPABASE_ANON near the top\n\nSee the full setup guide that came with this file.');
     return;
   }
 
-  const btn=document.getElementById('launch-btn');
-  const name=document.getElementById('cfg-name').value.trim()||'Maa';
-  const badge=document.getElementById('cfg-badge').value.trim()||"You're a Queen 👑";
-  const sub=document.getElementById('cfg-subtitle').value.trim();
-  const mcVal=document.querySelector('input[name="mc"]:checked').value;
-  const doneTitle=document.getElementById('cfg-done-title').value.trim()||'All surprises revealed! 🎉';
-  const doneMsg=document.getElementById('cfg-done-msg').value.trim();
-  const doneHearts=document.getElementById('cfg-done-hearts').value.trim()||'💖 🌸 💜 🌺 💝';
+  const btn = document.getElementById('launch-btn');
+  const name = document.getElementById('cfg-name').value.trim() || 'Maa';
+  const badge = document.getElementById('cfg-badge').value.trim() || "You're a Queen 👑";
+  const sub = document.getElementById('cfg-subtitle').value.trim();
+  const mcVal = document.querySelector('input[name="mc"]:checked').value;
+  const doneTitle = document.getElementById('cfg-done-title').value.trim() || 'All surprises revealed! 🎉';
+  const doneMsg = document.getElementById('cfg-done-msg').value.trim();
+  const doneHearts = document.getElementById('cfg-done-hearts').value.trim() || '💖 🌸 💜 🌺 💝';
 
-  let queenPhoto=null;
-  const qf=document.getElementById('cfg-photo').files[0];
-  if(qf) queenPhoto=croppedImages['cfg-photo']||await resizeImage(qf,400,0.7);
-
-  let songData=null;
-  if(mcVal==='custom'){
-    const sf=document.getElementById('cfg-song').files[0];
-    if(sf){
-      if(sf.size>4*1024*1024){alert('⚠️ Song file too large. Please choose a file under 4 MB.');return;}
-      songData=await readAudioFile(sf);
-    }else{alert('Please choose an audio file, or select a different music option.');return;}
+  // Collect queen photo
+  let queenPhotoBlob = null;
+  const qf = document.getElementById('cfg-photo').files[0];
+  if (qf) {
+    const dataUrl = croppedImages['cfg-photo'] || await resizeImageToDataUrl(qf, 800, 0.85);
+    queenPhotoBlob = dataUrlToBlob(dataUrl);
   }
 
-  const balloons=[];
-  for(let i=0;i<slotCount;i++){
-    const msgEl=document.getElementById(`slot-msg-${i}`);
-    const imgEl=document.getElementById(`slot-img-${i}`);
-    if(!msgEl) continue;
-    const msg=msgEl.value.trim();
-    let imgData=null;
-    if(imgEl&&imgEl.files[0]) imgData=croppedImages[`slot-img-${i}`]||await resizeImage(imgEl.files[0],500,0.55);
-    if(msg||imgData) balloons.push({msg,img:imgData,color:color(balloons.length)});
+  // Collect song
+  let songFile = null;
+  if (mcVal === 'custom') {
+    songFile = document.getElementById('cfg-song').files[0];
+    if (!songFile) { alert('Please choose an audio file, or select a different music option.'); return; }
   }
 
-  if(!balloons.length){alert('Please add at least one balloon message!');return;}
+  // Collect balloons
+  const balloons = [];
+  for (let i = 0; i < slotCount; i++) {
+    const msgEl = document.getElementById(`slot-msg-${i}`);
+    const imgEl = document.getElementById(`slot-img-${i}`);
+    if (!msgEl) continue;
+    const msg = msgEl.value.trim();
+    let photoBlob = null;
+    if (imgEl && imgEl.files[0]) {
+      const dataUrl = croppedImages[`slot-img-${i}`] || await resizeImageToDataUrl(imgEl.files[0], 900, 0.88);
+      photoBlob = dataUrlToBlob(dataUrl);
+    }
+    if (msg || photoBlob) balloons.push({ msg, photoBlob, color: color(balloons.length) });
+  }
 
-  btn.disabled=true;btn.textContent='⏳ Saving…';
-  showLoading('Saving your surprise…');
+  if (!balloons.length) { alert('Please add at least one balloon message!'); return; }
 
-  try{
-    const index={meta:{name,badge,sub,musicChoice:mcVal,doneTitle,doneMsg,doneHearts}, balloonBins:[], queenPhotoBin:null, songBin:null};
+  btn.disabled = true; btn.textContent = '⏳ Saving…';
+  const sessionKey = uid();
+  const totalSteps = 1 + (queenPhotoBlob?1:0) + balloons.length + (songFile?1:0) + 1;
+  let step = 0;
 
-    // Save queenPhoto as its own bin if present
-    if(queenPhoto){
-      showLoading('Saving welcome photo… (1/'+(balloons.length+3)+')');
-      index.queenPhotoBin=await createBin({data:queenPhoto},'mds-queen-photo');
+  const progress = () => { step++; showLoading(`Uploading… ${step}/${totalSteps}`, Math.round(step/totalSteps*95)); };
+
+  showLoading('Starting upload to Supabase… ☁️', 2);
+
+  try {
+    // Upload queen photo
+    let hasQueenPhoto = false;
+    if (queenPhotoBlob) {
+      progress();
+      await sbUploadFile(`${sessionKey}/queen-photo.jpg`, queenPhotoBlob, 'image/jpeg');
+      hasQueenPhoto = true;
     }
 
-    // Save each balloon as its own bin
-    for(let i=0;i<balloons.length;i++){
-      showLoading(`Saving balloon ${i+1} of ${balloons.length}… 🎈`);
-      const bid=await createBin(balloons[i],`mds-balloon-${i+1}`);
-      index.balloonBins.push(bid);
+    // Upload each balloon
+    const balloonMeta = [];
+    for (let i = 0; i < balloons.length; i++) {
+      progress();
+      const b = balloons[i];
+      let hasPhoto = false;
+      if (b.photoBlob) {
+        await sbUploadFile(`${sessionKey}/balloon-${i}-photo.jpg`, b.photoBlob, 'image/jpeg');
+        hasPhoto = true;
+      }
+      // Store text/meta as tiny JSON (no image data)
+      await sbUploadJson(`${sessionKey}/balloon-${i}.json`, { msg: b.msg, color: b.color, hasPhoto });
+      balloonMeta.push(i);
     }
 
-    // Save song as its own bin if present
-    if(songData){
-      showLoading('Saving music… 🎵');
-      index.songBin=await createBin({data:songData},'mds-song');
+    // Upload song (raw file, no base64 — supports large files!)
+    let hasSong = false;
+    if (songFile) {
+      progress();
+      showLoading(`Uploading song "${songFile.name}"… 🎵 (may take a moment)`, Math.round(step/totalSteps*95));
+      await sbUploadFile(`${sessionKey}/song`, songFile, songFile.type || 'audio/mpeg');
+      hasSong = true;
     }
 
-    // Save the tiny index bin last
-    showLoading('Almost done… ✨');
-    const indexBinId=await createBin(index,'mds-index');
+    // Upload index JSON
+    progress();
+    const index = {
+      meta: { name, badge, sub, musicChoice: mcVal, doneTitle, doneMsg, doneHearts },
+      balloonCount: balloons.length,
+      hasQueenPhoto,
+      hasSong,
+    };
+    await sbUploadJson(`${sessionKey}/index.json`, index);
 
-    const shareURL=`${location.href.split('#')[0]}#bin=${indexBinId}`;
-    config={name,badge,sub,queenPhoto,balloons,musicChoice:mcVal,songData,doneTitle,doneMsg,doneHearts};
+    const shareURL = `${location.href.split('#')[0]}#surprise=${sessionKey}`;
+
+    // Build local config for preview
+    config = {
+      name, badge, sub, musicChoice: mcVal, doneTitle, doneMsg, doneHearts,
+      queenPhoto: queenPhotoBlob ? URL.createObjectURL(queenPhotoBlob) : null,
+      songUrl: songFile ? URL.createObjectURL(songFile) : null,
+      balloons: balloons.map(b => ({
+        msg: b.msg,
+        color: b.color,
+        img: b.photoBlob ? URL.createObjectURL(b.photoBlob) : null,
+      })),
+    };
+
     hideLoading();
-    btn.disabled=false;btn.textContent='🔗 Generate Shareable Link';
-    document.getElementById('share-link-input').value=shareURL;
-    document.getElementById('copy-feedback').textContent='';
-    document.getElementById('share-overlay').style.display='flex';
+    btn.disabled = false; btn.textContent = '🔗 Generate Shareable Link';
+    document.getElementById('share-link-input').value = shareURL;
+    document.getElementById('copy-feedback').textContent = '';
+    document.getElementById('share-overlay').style.display = 'flex';
 
-  }catch(e){
+  } catch(e) {
     hideLoading();
-    btn.disabled=false;btn.textContent='🔗 Generate Shareable Link';
-    alert('Could not save the surprise.\n\nError: '+e.message+'\n\nCheck your JSONBin API key and internet connection.');
+    btn.disabled = false; btn.textContent = '🔗 Generate Shareable Link';
+    alert('Upload failed.\n\nError: ' + e.message + '\n\nChecklist:\n• Is your Supabase URL and anon key correct?\n• Did you create a bucket named "surprises"?\n• Is the bucket set to Public?\n• Do you have INSERT + SELECT policies enabled?');
   }
 }
 
-function showLoading(msg){
-  document.getElementById('loading-text').textContent=msg||'Please wait…';
-  document.getElementById('loading-screen').style.display='flex';
-  document.getElementById('setup-screen').style.display='none';
-}
-function hideLoading(){document.getElementById('loading-screen').style.display='none';}
+// ── Helpers ──────────────────────────────────────────────────
+function color(i){ return COLORS[i % COLORS.length]; }
 
-/* ── SETUP ── */
-function color(i){return COLORS[i%COLORS.length];}
+function dataUrlToBlob(dataUrl) {
+  const [header, data] = dataUrl.split(',');
+  const mime = header.match(/:(.*?);/)[1];
+  const bytes = atob(data);
+  const arr = new Uint8Array(bytes.length);
+  for (let i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i);
+  return new Blob([arr], { type: mime });
+}
+
+function resizeImageToDataUrl(file, maxW=800, quality=0.85){
+  return new Promise(resolve=>{
+    const r=new FileReader();
+    r.onload=e=>{
+      const img=new Image();
+      img.onload=()=>{
+        let w=img.width, h=img.height;
+        if(w>maxW){ h=Math.round(h*maxW/w); w=maxW; }
+        const canvas=document.createElement('canvas');
+        canvas.width=w; canvas.height=h;
+        canvas.getContext('2d').drawImage(img,0,0,w,h);
+        resolve(canvas.toDataURL('image/jpeg', quality));
+      };
+      img.src=e.target.result;
+    };
+    r.readAsDataURL(file);
+  });
+}
+
+const croppedImages={};
+function previewPhoto(input, previewId){
+  if(input.files && input.files[0]){
+    const r=new FileReader();
+    r.onload=e=>{
+      openCropModal(e.target.result, previewId, (croppedData)=>{ croppedImages[input.id]=croppedData; });
+    };
+    r.readAsDataURL(input.files[0]);
+  }
+}
 
 function addSlot(){
-  const i=slotCount++;const c=color(i);
+  const i=slotCount++; const c=color(i);
   const container=document.getElementById('balloon-slots');
   const div=document.createElement('div');
-  div.className='balloon-slot';div.id=`slot-${i}`;
+  div.className='balloon-slot'; div.id=`slot-${i}`;
   div.innerHTML=`
     <div class="slot-header">
       <div class="slot-header-left">
@@ -652,61 +730,16 @@ function addSlot(){
   container.appendChild(div);
 }
 
-function removeSlot(i){const el=document.getElementById(`slot-${i}`);if(el)el.remove();}
-
-const croppedImages={};
-function previewPhoto(input,previewId){
-  if(input.files&&input.files[0]){
-    const r=new FileReader();
-    r.onload=e=>{
-      openCropModal(e.target.result,previewId,(croppedData)=>{croppedImages[input.id]=croppedData;});
-    };
-    r.readAsDataURL(input.files[0]);
-  }
-}
-
-function resizeImage(file,maxW=400,quality=0.6){
-  return new Promise(resolve=>{
-    const r=new FileReader();
-    r.onload=e=>{
-      const img=new Image();
-      img.onload=()=>{
-        let w=img.width,h=img.height;
-        if(w>maxW){h=Math.round(h*maxW/w);w=maxW;}
-        const canvas=document.createElement('canvas');
-        canvas.width=w;canvas.height=h;
-        canvas.getContext('2d').drawImage(img,0,0,w,h);
-        // Iteratively compress until under 70KB
-        let q=quality;
-        let result=canvas.toDataURL('image/jpeg',q);
-        while(result.length>70*1024*1.37&&q>0.15){
-          q-=0.08;
-          result=canvas.toDataURL('image/jpeg',q);
-        }
-        resolve(result);
-      };
-      img.src=e.target.result;
-    };
-    r.readAsDataURL(file);
-  });
-}
-
-function readAudioFile(file){
-  return new Promise(resolve=>{
-    const r=new FileReader();
-    r.onload=e=>resolve(e.target.result);
-    r.readAsDataURL(file);
-  });
-}
+function removeSlot(i){ const el=document.getElementById(`slot-${i}`); if(el)el.remove(); }
 
 function onMusicChange(){
   const val=document.querySelector('input[name="mc"]:checked').value;
-  document.getElementById('song-upload-area').style.display=val==='custom'?'block':'none';
+  document.getElementById('song-upload-area').style.display = val==='custom' ? 'block' : 'none';
 }
 
 function onSongChosen(input){
   const tag=document.getElementById('song-name-tag');
-  if(input.files&&input.files[0]){
+  if(input.files && input.files[0]){
     const mb=(input.files[0].size/1024/1024).toFixed(1);
     tag.textContent=`🎵 ${input.files[0].name} (${mb} MB)`;
     tag.style.display='block';
@@ -717,7 +750,7 @@ function copyLink(){
   const val=document.getElementById('share-link-input').value;
   navigator.clipboard.writeText(val).then(()=>{
     document.getElementById('copy-feedback').textContent='✅ Copied! Send this link to Mom 💕';
-    setTimeout(()=>{document.getElementById('copy-feedback').textContent='';},4000);
+    setTimeout(()=>{ document.getElementById('copy-feedback').textContent=''; },4000);
   }).catch(()=>{
     document.getElementById('share-link-input').select();
     document.execCommand('copy');
@@ -727,23 +760,22 @@ function copyLink(){
 
 function previewNow(){
   closeShareOverlay();
-  totalBalloons=config.balloons.length;poppedCount=0;
-  buildQueenScreen();buildBalloonField();buildPetals();initMusic();
+  totalBalloons=config.balloons.length; poppedCount=0;
+  buildQueenScreen(); buildBalloonField(); buildPetals(); initMusic();
   document.getElementById('setup-screen').style.display='none';
   document.getElementById('app').style.display='block';
   document.getElementById('nav-left').style.display='flex';
   document.getElementById('nav-right').style.display='flex';
 }
 
-function closeShareOverlay(){document.getElementById('share-overlay').style.display='none';}
+function closeShareOverlay(){ document.getElementById('share-overlay').style.display='none'; }
 
-/* ── QUEEN ── */
+// ── Queen screen ─────────────────────────────────────────────
 function buildQueenScreen(){
   document.getElementById('queen-title-el').textContent=`Happy Mother's Day, ${config.name} ✨`;
   document.getElementById('queen-badge-el').textContent=config.badge;
   document.getElementById('queen-subtitle-el').textContent=config.sub;
   document.getElementById('balloon-title-el').textContent=`Pop the balloons, ${config.name}! 🎈`;
-  // Done screen
   document.getElementById('done-title-el').textContent=config.doneTitle||'All surprises revealed! 🎉';
   document.getElementById('done-msg-el').textContent=config.doneMsg||`Thank you for everything, ${config.name}. Love you always 💕`;
   document.getElementById('done-hearts-el').textContent=config.doneHearts||'💖 🌸 💜 🌺 💝';
@@ -753,15 +785,15 @@ function buildQueenScreen(){
     :`<div class="queen-photo-placeholder">🌸</div>`;
 }
 
-/* ── BALLOONS ── */
+// ── Balloons ─────────────────────────────────────────────────
 function buildBalloonField(){
   const field=document.getElementById('balloon-field');
-  field.innerHTML='';updateRemaining();
+  field.innerHTML=''; updateRemaining();
   const pos=generatePositions(config.balloons.length);
   config.balloons.forEach((b,i)=>{
     const[lp,tp]=pos[i];
     const wrap=document.createElement('div');
-    wrap.className='balloon-wrap';wrap.id=`balloon-${i}`;
+    wrap.className='balloon-wrap'; wrap.id=`balloon-${i}`;
     wrap.style.cssText=`left:${lp}%;top:${tp}%;animation-duration:${(3+Math.random()*2.5).toFixed(2)}s;animation-delay:${(Math.random()*2).toFixed(2)}s`;
     wrap.innerHTML=balloonSVG(b.color)+`<div class="balloon-string"></div>`;
     wrap.onclick=()=>popBalloon(i,b,wrap);
@@ -770,7 +802,7 @@ function buildBalloonField(){
 }
 
 function generatePositions(n){
-  const cols=Math.ceil(Math.sqrt(n*1.7)),rows=Math.ceil(n/cols),pos=[];
+  const cols=Math.ceil(Math.sqrt(n*1.7)), rows=Math.ceil(n/cols), pos=[];
   let idx=0;
   for(let r=0;r<rows&&idx<n;r++)
     for(let c=0;c<cols&&idx<n;c++,idx++){
@@ -792,41 +824,41 @@ function balloonSVG(c){
 function updateRemaining(){
   const left=totalBalloons-poppedCount;
   document.getElementById('remaining-el').textContent=
-    left>0?`${left} surprise${left!==1?'s':''} remaining`:'All surprises found! 🎉';
+    left>0 ? `${left} surprise${left!==1?'s':''} remaining` : 'All surprises found! 🎉';
 }
 
 function popBalloon(i,b,wrap){
-  wrap.classList.add('popped');poppedCount++;updateRemaining();
-  playPopSound();burstConfetti(wrap);
-  setTimeout(()=>showModal(b),230);
-  if(poppedCount===totalBalloons) setTimeout(showDone,3400);
+  wrap.classList.add('popped'); poppedCount++; updateRemaining();
+  playPopSound(); burstConfetti(wrap);
+  setTimeout(()=>showModal(b), 230);
+  if(poppedCount===totalBalloons) setTimeout(showDone, 3400);
 }
 
-/* ── SOUND ── */
-function getCtx(){if(!audioCtx)audioCtx=new(window.AudioContext||window.webkitAudioContext)();return audioCtx;}
+// ── Sound ────────────────────────────────────────────────────
+function getCtx(){ if(!audioCtx) audioCtx=new(window.AudioContext||window.webkitAudioContext)(); return audioCtx; }
 function playPopSound(){
   try{
-    const ctx=getCtx(),bufSize=Math.floor(ctx.sampleRate*.15),buf=ctx.createBuffer(1,bufSize,ctx.sampleRate),data=buf.getChannelData(0);
-    for(let i=0;i<bufSize;i++)data[i]=(Math.random()*2-1)*Math.pow(1-i/bufSize,1.8);
-    const src=ctx.createBufferSource();src.buffer=buf;
-    const bp=ctx.createBiquadFilter();bp.type='bandpass';bp.frequency.value=900;bp.Q.value=.7;
-    const gn=ctx.createGain();gn.gain.setValueAtTime(1.8,ctx.currentTime);gn.gain.exponentialRampToValueAtTime(.001,ctx.currentTime+.15);
-    src.connect(bp);bp.connect(gn);gn.connect(ctx.destination);src.start();src.stop(ctx.currentTime+.16);
+    const ctx=getCtx(), bufSize=Math.floor(ctx.sampleRate*.15),
+      buf=ctx.createBuffer(1,bufSize,ctx.sampleRate), data=buf.getChannelData(0);
+    for(let i=0;i<bufSize;i++) data[i]=(Math.random()*2-1)*Math.pow(1-i/bufSize,1.8);
+    const src=ctx.createBufferSource(); src.buffer=buf;
+    const bp=ctx.createBiquadFilter(); bp.type='bandpass'; bp.frequency.value=900; bp.Q.value=.7;
+    const gn=ctx.createGain(); gn.gain.setValueAtTime(1.8,ctx.currentTime); gn.gain.exponentialRampToValueAtTime(.001,ctx.currentTime+.15);
+    src.connect(bp); bp.connect(gn); gn.connect(ctx.destination);
+    src.start(); src.stop(ctx.currentTime+.16);
   }catch(e){}
 }
 
-/* ── MUSIC ── */
+// ── Music ────────────────────────────────────────────────────
 function initMusic(){
   if(config.musicChoice==='none') return;
-  if(config.musicChoice==='custom'&&config.songData){
-    const audio=new Audio(config.songData);
-    audio.loop=true;audio.volume=0.45;
+  if(config.musicChoice==='custom' && config.songUrl){
+    const audio=new Audio(config.songUrl);
+    audio.loop=true; audio.volume=0.45;
     audio.play().catch(()=>{});
-    // store so toggle works
     window._bgAudio=audio;
     document.getElementById('music-bar-label').textContent='Your song 🎵';
     document.getElementById('music-bar').style.display='flex';
-    // override toggle for audio element
     window._musicIsCustom=true;
     return;
   }
@@ -835,16 +867,18 @@ function initMusic(){
   document.getElementById('music-bar-label').textContent='Background music';
   document.getElementById('music-bar').style.display='flex';
 }
+
 function toggleMusic(){
   const btn=document.getElementById('music-toggle');
-  if(window._musicIsCustom&&window._bgAudio){
-    if(musicPaused){window._bgAudio.play();btn.textContent='⏸';musicPaused=false;}
-    else{window._bgAudio.pause();btn.textContent='▶';musicPaused=true;}
+  if(window._musicIsCustom && window._bgAudio){
+    if(musicPaused){ window._bgAudio.play(); btn.textContent='⏸'; musicPaused=false; }
+    else{ window._bgAudio.pause(); btn.textContent='▶'; musicPaused=true; }
     return;
   }
-  if(!musicPaused){stopDefaultMelody();btn.textContent='▶';musicPaused=true;}
-  else{startDefaultMelody();btn.textContent='⏸';musicPaused=false;}
+  if(!musicPaused){ stopDefaultMelody(); btn.textContent='▶'; musicPaused=true; }
+  else{ startDefaultMelody(); btn.textContent='⏸'; musicPaused=false; }
 }
+
 const MELODY=[
   {f:523.25,t:0,d:.4},{f:587.33,t:.5,d:.4},{f:659.25,t:1,d:.4},{f:698.46,t:1.5,d:.4},
   {f:783.99,t:2,d:.85},{f:659.25,t:3,d:.4},{f:587.33,t:3.5,d:.4},{f:523.25,t:4,d:.85},
@@ -854,66 +888,68 @@ const MELODY=[
   {f:880,t:13,d:.4},{f:783.99,t:13.5,d:.4},{f:659.25,t:14,d:.4},{f:523.25,t:14.5,d:1.4},
 ];
 const LOOP_LEN=16.5;
+
 function startDefaultMelody(){
   try{
     const ctx=getCtx();
-    masterGainNode=ctx.createGain();masterGainNode.gain.value=.16;masterGainNode.connect(ctx.destination);
+    masterGainNode=ctx.createGain(); masterGainNode.gain.value=.16; masterGainNode.connect(ctx.destination);
     let offset=0;
     function scheduleBar(){
       MELODY.forEach(({f,t,d})=>{
-        const osc=ctx.createOscillator(),gn=ctx.createGain();
-        osc.type='sine';osc.frequency.value=f;
+        const osc=ctx.createOscillator(), gn=ctx.createGain();
+        osc.type='sine'; osc.frequency.value=f;
         const s=ctx.currentTime+offset+t;
-        gn.gain.setValueAtTime(0,s);gn.gain.linearRampToValueAtTime(.85,s+.04);
-        gn.gain.setValueAtTime(.85,s+d-.06);gn.gain.linearRampToValueAtTime(0,s+d);
-        osc.connect(gn);gn.connect(masterGainNode);osc.start(s);osc.stop(s+d+.02);
+        gn.gain.setValueAtTime(0,s); gn.gain.linearRampToValueAtTime(.85,s+.04);
+        gn.gain.setValueAtTime(.85,s+d-.06); gn.gain.linearRampToValueAtTime(0,s+d);
+        osc.connect(gn); gn.connect(masterGainNode); osc.start(s); osc.stop(s+d+.02);
       });
       offset+=LOOP_LEN;
     }
     scheduleBar();
-    defaultLoopId=setInterval(()=>{if(!musicPaused)scheduleBar();},LOOP_LEN*1000);
+    defaultLoopId=setInterval(()=>{ if(!musicPaused)scheduleBar(); }, LOOP_LEN*1000);
   }catch(e){}
 }
+
 function stopDefaultMelody(){
-  if(defaultLoopId){clearInterval(defaultLoopId);defaultLoopId=null;}
-  if(masterGainNode)try{masterGainNode.gain.linearRampToValueAtTime(0,audioCtx.currentTime+.4);}catch(e){}
+  if(defaultLoopId){ clearInterval(defaultLoopId); defaultLoopId=null; }
+  if(masterGainNode) try{ masterGainNode.gain.linearRampToValueAtTime(0,audioCtx.currentTime+.4); }catch(e){}
 }
 
-/* ── CONFETTI ── */
+// ── Confetti ─────────────────────────────────────────────────
 function burstConfetti(wrap){
-  const r=wrap.getBoundingClientRect(),cx=r.left+r.width/2,cy=r.top+r.height/2;
+  const r=wrap.getBoundingClientRect(), cx=r.left+r.width/2, cy=r.top+r.height/2;
   const cs=['#f472b6','#a855f7','#fbbf24','#34d399','#60a5fa','#f87171','#f0a090'];
   for(let j=0;j<24;j++){
-    const el=document.createElement('div');el.className='confetti-piece';
+    const el=document.createElement('div'); el.className='confetti-piece';
     el.style.cssText=`left:${cx+(Math.random()-.5)*80}px;top:${cy}px;width:${5+Math.random()*7}px;height:${5+Math.random()*7}px;background:${cs[Math.floor(Math.random()*cs.length)]};transform:rotate(${Math.random()*360}deg);`;
-    document.body.appendChild(el);setTimeout(()=>el.remove(),1400);
+    document.body.appendChild(el); setTimeout(()=>el.remove(),1400);
   }
 }
 function bigConfetti(){
   const cs=['#f472b6','#a855f7','#fbbf24','#34d399','#60a5fa','#f87171'];
   for(let j=0;j<80;j++){
     setTimeout(()=>{
-      const el=document.createElement('div');el.className='confetti-piece';
+      const el=document.createElement('div'); el.className='confetti-piece';
       el.style.cssText=`left:${Math.random()*100}vw;top:0;width:${5+Math.random()*9}px;height:${5+Math.random()*9}px;background:${cs[Math.floor(Math.random()*cs.length)]};animation-duration:${1.4+Math.random()*.8}s;`;
-      document.body.appendChild(el);setTimeout(()=>el.remove(),2600);
-    },j*50);
+      document.body.appendChild(el); setTimeout(()=>el.remove(),2600);
+    }, j*50);
   }
 }
 
-/* ── MODAL ── */
+// ── Modal ────────────────────────────────────────────────────
 function showModal(b){
-  document.getElementById('modal-photo-area').innerHTML=b.img
-    ?`<img src="${b.img}" class="modal-photo" alt="Memory"/>`
-    :`<div class="modal-photo-placeholder">🌸</div>`;
-  document.getElementById('modal-msg-el').textContent=b.msg||'';
+  document.getElementById('modal-photo-area').innerHTML = b.img
+    ? `<img src="${b.img}" class="modal-photo" alt="Memory"/>`
+    : `<div class="modal-photo-placeholder">🌸</div>`;
+  document.getElementById('modal-msg-el').textContent = b.msg||'';
   document.getElementById('reveal-modal').style.display='flex';
 }
 function closeModal(e){
-  if(!e||e.target===document.getElementById('reveal-modal')||e.currentTarget.tagName==='BUTTON')
+  if(!e || e.target===document.getElementById('reveal-modal') || e.currentTarget.tagName==='BUTTON')
     document.getElementById('reveal-modal').style.display='none';
 }
 
-/* ── NAV ── */
+// ── Navigation ───────────────────────────────────────────────
 function showBalloons(){
   document.getElementById('queen-screen').style.display='none';
   document.getElementById('balloon-screen').style.display='flex';
@@ -922,23 +958,23 @@ function showBalloons(){
 function showDone(){
   document.getElementById('balloon-screen').style.display='none';
   document.getElementById('done-screen').style.display='flex';
-  currentPage=3;bigConfetti();
+  currentPage=3; bigConfetti();
 }
 function navigate(dir){
-  if(dir===1&&currentPage===1)showBalloons();
-  else if(dir===-1&&currentPage===2){
+  if(dir===1 && currentPage===1) showBalloons();
+  else if(dir===-1 && currentPage===2){
     document.getElementById('balloon-screen').style.display='none';
     document.getElementById('queen-screen').style.display='flex';
     currentPage=1;
   }
 }
 
-/* ── PETALS ── */
+// ── Petals ───────────────────────────────────────────────────
 function buildPetals(){
-  const c=document.getElementById('petals-container');c.innerHTML='';
+  const c=document.getElementById('petals-container'); c.innerHTML='';
   const emojis=['🌸','🌺','✿','❀','🌷'];
   for(let i=0;i<14;i++){
-    const p=document.createElement('div');p.className='petal';
+    const p=document.createElement('div'); p.className='petal';
     p.textContent=emojis[Math.floor(Math.random()*emojis.length)];
     p.style.left=Math.random()*100+'vw';
     p.style.animationDuration=(6+Math.random()*8)+'s';
@@ -947,7 +983,8 @@ function buildPetals(){
   }
 }
 
-addSlot();addSlot();addSlot();
+// Init with 3 default balloon slots
+addSlot(); addSlot(); addSlot();
 </script>
 </body>
 </html>
