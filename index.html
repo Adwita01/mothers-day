@@ -398,16 +398,25 @@ function stopDrag(){_dragStart=null;window.removeEventListener('mousemove',onDra
 function stopDragTouch(){_dragStart=null;window.removeEventListener('touchmove',onDragTouch);window.removeEventListener('touchend',stopDragTouch);}
 
 function confirmCrop(){
-  // Draw visible area to canvas
   const vp=document.getElementById('crop-viewport');
   const vpW=vp.clientWidth,vpH=vp.clientHeight;
+  // Output at max 400px wide to keep file size small
+  const maxOut=400;
+  const scale=Math.min(1,maxOut/vpW);
+  const outW=Math.round(vpW*scale),outH=Math.round(vpH*scale);
   const canvas=document.createElement('canvas');
-  canvas.width=vpW;canvas.height=vpH;
+  canvas.width=outW;canvas.height=outH;
   const ctx=canvas.getContext('2d');
+  ctx.scale(scale,scale);
   const img=document.getElementById('crop-img');
   ctx.drawImage(img,_cropX,_cropY,_cropNatW*_cropScale,_cropNatH*_cropScale);
-  const result=canvas.toDataURL('image/jpeg',0.72);
-  // Show preview
+  // Compress iteratively until under 70KB
+  let quality=0.6;
+  let result=canvas.toDataURL('image/jpeg',quality);
+  while(result.length>70*1024*1.37&&quality>0.15){
+    quality-=0.08;
+    result=canvas.toDataURL('image/jpeg',quality);
+  }
   if(_cropPreviewId){
     const prev=document.getElementById(_cropPreviewId);
     if(prev){prev.src=result;prev.style.display='block';}
@@ -447,6 +456,9 @@ let audioCtx=null,musicPaused=false,defaultLoopId=null,masterGainNode=null;
 
 /* ── JSONBIN HELPERS ── */
 async function createBin(data, name){
+  const body=JSON.stringify(data);
+  const sizeKB=new Blob([body]).size/1024;
+  if(sizeKB>95) throw new Error(`"${name}" is ${sizeKB.toFixed(0)}KB — still over 100KB limit. Please use a smaller/simpler photo.`);
   const res=await fetch('https://api.jsonbin.io/v3/b',{
     method:'POST',
     headers:{
@@ -455,7 +467,7 @@ async function createBin(data, name){
       'X-Bin-Name':name,
       'X-Bin-Private':'false'
     },
-    body:JSON.stringify(data)
+    body:body
   });
   if(!res.ok){const t=await res.text();throw new Error(t);}
   const d=await res.json();
@@ -653,7 +665,7 @@ function previewPhoto(input,previewId){
   }
 }
 
-function resizeImage(file,maxW=500,quality=0.55){
+function resizeImage(file,maxW=400,quality=0.6){
   return new Promise(resolve=>{
     const r=new FileReader();
     r.onload=e=>{
@@ -664,7 +676,14 @@ function resizeImage(file,maxW=500,quality=0.55){
         const canvas=document.createElement('canvas');
         canvas.width=w;canvas.height=h;
         canvas.getContext('2d').drawImage(img,0,0,w,h);
-        resolve(canvas.toDataURL('image/jpeg',quality));
+        // Iteratively compress until under 70KB
+        let q=quality;
+        let result=canvas.toDataURL('image/jpeg',q);
+        while(result.length>70*1024*1.37&&q>0.15){
+          q-=0.08;
+          result=canvas.toDataURL('image/jpeg',q);
+        }
+        resolve(result);
       };
       img.src=e.target.result;
     };
