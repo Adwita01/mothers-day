@@ -159,14 +159,33 @@ body{font-family:'Nunito',sans-serif;background:linear-gradient(135deg,#e8f8f0,#
       <h2>🎵 Background Music</h2>
       <div class="music-options">
         <label class="music-choice">
-          <input type="radio" name="mc" value="default" checked/>
+          <input type="radio" name="mc" value="default" checked onchange="onMusicChange()"/>
           <div>
             <div class="music-choice-label">🎶 Play default music</div>
             <div class="music-choice-desc">A gentle cheerful melody plays automatically</div>
           </div>
         </label>
+        <label class="music-choice" style="flex-direction:column;align-items:flex-start">
+          <div style="display:flex;align-items:flex-start;gap:10px;width:100%">
+            <input type="radio" name="mc" value="custom" onchange="onMusicChange()" style="margin-top:3px;accent-color:var(--green);width:16px;height:16px;cursor:pointer;flex-shrink:0"/>
+            <div>
+              <div class="music-choice-label">🎵 Upload my own song</div>
+              <div class="music-choice-desc">MP3, WAV or any audio file from your device</div>
+            </div>
+          </div>
+          <div id="song-upload-area" style="display:none;width:100%;margin-top:.75rem;padding-left:26px">
+            <label class="img-upload-label" style="margin-bottom:.4rem">
+              🎵 Choose audio file
+              <input type="file" id="cfg-song" accept="audio/*" onchange="onSongChosen(this)"/>
+            </label>
+            <div id="song-name-tag" style="font-size:.8rem;color:var(--green-dark);font-weight:600;display:none"></div>
+            <div style="font-size:.75rem;color:#e07000;margin-top:.4rem;background:#fff8ee;border-radius:6px;padding:.4rem .6rem">
+              ⚠️ Keep song file under <strong>3 MB</strong> for best results.
+            </div>
+          </div>
+        </label>
         <label class="music-choice">
-          <input type="radio" name="mc" value="none"/>
+          <input type="radio" name="mc" value="none" onchange="onMusicChange()"/>
           <div>
             <div class="music-choice-label">🔇 No music</div>
             <div class="music-choice-desc">Only the balloon pop sound effect will play</div>
@@ -353,6 +372,28 @@ function resizeImage(file,maxW=600,quality=0.72){
   });
 }
 
+function readAudioFile(file){
+  return new Promise(resolve=>{
+    const r=new FileReader();
+    r.onload=e=>resolve(e.target.result);
+    r.readAsDataURL(file);
+  });
+}
+
+function onMusicChange(){
+  const val=document.querySelector('input[name="mc"]:checked').value;
+  document.getElementById('song-upload-area').style.display=val==='custom'?'block':'none';
+}
+
+function onSongChosen(input){
+  const tag=document.getElementById('song-name-tag');
+  if(input.files&&input.files[0]){
+    const mb=(input.files[0].size/1024/1024).toFixed(1);
+    tag.textContent=`🎵 ${input.files[0].name} (${mb} MB)`;
+    tag.style.display='block';
+  }
+}
+
 /* ── LAUNCH ── */
 async function launchSurprise(){
   if(JSONBIN_KEY.includes('REPLACEME')){
@@ -370,6 +411,22 @@ async function launchSurprise(){
   const qf=document.getElementById('cfg-photo').files[0];
   if(qf) queenPhoto=await resizeImage(qf,400,0.7);
 
+  // Handle custom song
+  let songData=null;
+  if(mcVal==='custom'){
+    const sf=document.getElementById('cfg-song').files[0];
+    if(sf){
+      if(sf.size>4*1024*1024){
+        alert('⚠️ Song file is too large ('+( sf.size/1024/1024).toFixed(1)+' MB). Please choose a file under 4 MB.');
+        return;
+      }
+      songData=await readAudioFile(sf);
+    } else {
+      alert('Please choose an audio file, or select a different music option.');
+      return;
+    }
+  }
+
   const balloons=[];
   for(let i=0;i<slotCount;i++){
     const msgEl=document.getElementById(`slot-msg-${i}`);
@@ -383,7 +440,7 @@ async function launchSurprise(){
 
   if(!balloons.length){alert('Please add at least one balloon message!');return;}
 
-  config={name,badge,sub,queenPhoto,balloons,musicChoice:mcVal};
+  config={name,badge,sub,queenPhoto,balloons,musicChoice:mcVal,songData};
   btn.disabled=true;btn.textContent='⏳ Saving…';
   showLoading('Saving your surprise…');
 
