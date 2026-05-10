@@ -110,9 +110,9 @@ body{font-family:'Nunito',sans-serif;background:linear-gradient(135deg,#e8f8f0,#
 .confetti-piece{position:fixed;pointer-events:none;border-radius:2px;animation:confetti-fall 1.3s ease-out forwards;z-index:200}
 @keyframes confetti-fall{0%{transform:translateY(0) rotate(0deg);opacity:1}100%{transform:translateY(340px) rotate(720deg);opacity:0}}
 #done-screen{display:none;min-height:100vh;align-items:center;justify-content:center;flex-direction:column;text-align:center;padding:2rem;position:relative;z-index:1}
-.done-title{font-family:'Playfair Display',serif;font-size:clamp(1.8rem,5vw,3rem);color:var(--green-dark);margin-bottom:1rem;animation:pop-up .8s cubic-bezier(.34,1.56,.64,1) both}
-.done-subtitle{color:#555;font-size:1.1rem;margin-bottom:2rem;animation:pop-up .8s .2s cubic-bezier(.34,1.56,.64,1) both}
-.done-hearts{font-size:3rem;animation:pop-up .8s .4s cubic-bezier(.34,1.56,.64,1) both}
+.done-title{font-family:'Playfair Display',serif;font-size:clamp(1.8rem,5vw,3rem);color:var(--green-dark);margin-bottom:1.2rem;animation:pop-up .8s cubic-bezier(.34,1.56,.64,1) both}
+.done-msg{color:#444;font-size:1.1rem;max-width:480px;line-height:1.8;margin-bottom:1.8rem;text-align:center;white-space:pre-wrap;font-style:italic;background:white;border-radius:20px;padding:1.5rem 2rem;box-shadow:0 8px 32px rgba(46,204,113,.12);border:1.5px solid #d4f5e9;animation:pop-up .8s .2s cubic-bezier(.34,1.56,.64,1) both}
+.done-hearts{font-size:2.5rem;animation:pop-up .8s .4s cubic-bezier(.34,1.56,.64,1) both;letter-spacing:.2rem}
 .nav-arrow{position:fixed;top:50%;transform:translateY(-50%);width:48px;height:48px;background:rgba(255,255,255,.85);border:none;border-radius:50%;font-size:1.3rem;cursor:pointer;box-shadow:0 4px 16px rgba(0,0,0,.12);z-index:50;display:none;align-items:center;justify-content:center;transition:background .2s;color:#555}
 .nav-arrow:hover{background:white}
 #nav-left{left:12px}#nav-right{right:12px}
@@ -215,6 +215,22 @@ input.crop-slider{width:100%;accent-color:var(--green);cursor:pointer;margin:0}
       <button class="add-btn" onclick="addSlot()">+ Add another balloon</button>
     </div>
 
+    <div class="setup-section">
+      <h2>💌 Final Message (shown after all balloons are popped)</h2>
+      <div class="field-row">
+        <label>Main title</label>
+        <input id="cfg-done-title" type="text" value="All surprises revealed! 🎉" maxlength="60"/>
+      </div>
+      <div class="field-row">
+        <label>Your heartfelt message</label>
+        <textarea id="cfg-done-msg" style="min-height:110px">Thank you for everything, Maa. Every day I am grateful to have you in my life. Love you always and forever 💕</textarea>
+      </div>
+      <div class="field-row">
+        <label>Emoji hearts row (optional)</label>
+        <input id="cfg-done-hearts" type="text" value="💖 🌸 💜 🌺 💝" maxlength="60"/>
+      </div>
+    </div>
+
     <button class="launch-btn" id="launch-btn" onclick="launchSurprise()">🔗 Generate Shareable Link</button>
   </div>
 </div>
@@ -262,9 +278,9 @@ input.crop-slider{width:100%;accent-color:var(--green);cursor:pointer;margin:0}
     <div id="balloon-field"></div>
   </div>
   <div id="done-screen">
-    <div class="done-title">All surprises revealed! 🎉</div>
-    <div class="done-subtitle" id="done-subtitle-el">Thank you for everything, Mom. Love you always 💕</div>
-    <div class="done-hearts">💖 🌸 💜 🌺 💝</div>
+    <div class="done-title" id="done-title-el">All surprises revealed! 🎉</div>
+    <div class="done-msg" id="done-msg-el"></div>
+    <div class="done-hearts" id="done-hearts-el">💖 🌸 💜 🌺 💝</div>
   </div>
 </div>
 
@@ -429,21 +445,69 @@ const COLORS=[
 let slotCount=0,config={},poppedCount=0,totalBalloons=0,currentPage=1;
 let audioCtx=null,musicPaused=false,defaultLoopId=null,masterGainNode=null;
 
-/* ── CHECK URL ON LOAD ── */
+/* ── JSONBIN HELPERS ── */
+async function createBin(data, name){
+  const res=await fetch('https://api.jsonbin.io/v3/b',{
+    method:'POST',
+    headers:{
+      'Content-Type':'application/json',
+      'X-Master-Key':JSONBIN_KEY,
+      'X-Bin-Name':name,
+      'X-Bin-Private':'false'
+    },
+    body:JSON.stringify(data)
+  });
+  if(!res.ok){const t=await res.text();throw new Error(t);}
+  const d=await res.json();
+  return d.metadata.id;
+}
+
+async function fetchBin(binId){
+  const res=await fetch(`https://api.jsonbin.io/v3/b/${binId}/latest`,{
+    headers:{'X-Access-Key':JSONBIN_KEY}
+  });
+  if(!res.ok) throw new Error('HTTP '+res.status);
+  const d=await res.json();
+  return d.record;
+}
+
+/* ── LOAD: reassemble from index bin ── */
 window.addEventListener('load',()=>{
   const h=location.hash;
   if(h&&h.startsWith('#bin=')) loadFromBin(h.slice(5));
 });
 
-async function loadFromBin(binId){
-  showLoading('Opening your surprise…');
+async function loadFromBin(indexBinId){
+  showLoading('Opening your surprise… 🌸');
   try{
-    const res=await fetch(`https://api.jsonbin.io/v3/b/${binId}/latest`,{
-      headers:{'X-Access-Key':JSONBIN_KEY}
-    });
-    if(!res.ok) throw new Error('HTTP '+res.status);
-    const data=await res.json();
-    config=data.record;
+    // 1. Load index bin — contains {meta, balloonBins[], queenPhotoBin?, songBin?}
+    const index=await fetchBin(indexBinId);
+
+    // 2. Load meta (name, badge, sub, musicChoice)
+    config={...index.meta, balloons:[], queenPhoto:null, songData:null};
+
+    // 3. Load queenPhoto bin if exists
+    if(index.queenPhotoBin){
+      showLoading('Loading photos… 🌸');
+      const qd=await fetchBin(index.queenPhotoBin);
+      config.queenPhoto=qd.data;
+    }
+
+    // 4. Load each balloon bin
+    const total=index.balloonBins.length;
+    for(let i=0;i<total;i++){
+      showLoading(`Loading balloon ${i+1} of ${total}… 🎈`);
+      const bd=await fetchBin(index.balloonBins[i]);
+      config.balloons.push(bd);
+    }
+
+    // 5. Load song bin if exists
+    if(index.songBin){
+      showLoading('Loading music… 🎵');
+      const sd=await fetchBin(index.songBin);
+      config.songData=sd.data;
+    }
+
     totalBalloons=config.balloons.length;
     poppedCount=0;
     buildQueenScreen();buildBalloonField();buildPetals();
@@ -456,7 +520,93 @@ async function loadFromBin(binId){
   }catch(e){
     hideLoading();
     document.getElementById('setup-screen').style.display='flex';
-    alert('Could not load the surprise. The link may be expired or the API key needs to be set up.\n\nSee instructions inside the HTML file.');
+    alert('Could not load the surprise.\n\nError: '+e.message);
+  }
+}
+
+/* ── LAUNCH: save each piece as its own bin ── */
+async function launchSurprise(){
+  if(JSONBIN_KEY.includes('REPLACEME')){
+    alert('⚠️ Please set up your free JSONBin API key first!\n\n1. Go to https://jsonbin.io and sign up (free)\n2. Go to Account → API Keys → copy your Master Key\n3. Open this HTML file in a text editor\n4. Replace the JSONBIN_KEY value near the top\n\nThen it will work!');
+    return;
+  }
+
+  const btn=document.getElementById('launch-btn');
+  const name=document.getElementById('cfg-name').value.trim()||'Maa';
+  const badge=document.getElementById('cfg-badge').value.trim()||"You're a Queen 👑";
+  const sub=document.getElementById('cfg-subtitle').value.trim();
+  const mcVal=document.querySelector('input[name="mc"]:checked').value;
+  const doneTitle=document.getElementById('cfg-done-title').value.trim()||'All surprises revealed! 🎉';
+  const doneMsg=document.getElementById('cfg-done-msg').value.trim();
+  const doneHearts=document.getElementById('cfg-done-hearts').value.trim()||'💖 🌸 💜 🌺 💝';
+
+  let queenPhoto=null;
+  const qf=document.getElementById('cfg-photo').files[0];
+  if(qf) queenPhoto=croppedImages['cfg-photo']||await resizeImage(qf,400,0.7);
+
+  let songData=null;
+  if(mcVal==='custom'){
+    const sf=document.getElementById('cfg-song').files[0];
+    if(sf){
+      if(sf.size>4*1024*1024){alert('⚠️ Song file too large. Please choose a file under 4 MB.');return;}
+      songData=await readAudioFile(sf);
+    }else{alert('Please choose an audio file, or select a different music option.');return;}
+  }
+
+  const balloons=[];
+  for(let i=0;i<slotCount;i++){
+    const msgEl=document.getElementById(`slot-msg-${i}`);
+    const imgEl=document.getElementById(`slot-img-${i}`);
+    if(!msgEl) continue;
+    const msg=msgEl.value.trim();
+    let imgData=null;
+    if(imgEl&&imgEl.files[0]) imgData=croppedImages[`slot-img-${i}`]||await resizeImage(imgEl.files[0],500,0.55);
+    if(msg||imgData) balloons.push({msg,img:imgData,color:color(balloons.length)});
+  }
+
+  if(!balloons.length){alert('Please add at least one balloon message!');return;}
+
+  btn.disabled=true;btn.textContent='⏳ Saving…';
+  showLoading('Saving your surprise…');
+
+  try{
+    const index={meta:{name,badge,sub,musicChoice:mcVal,doneTitle,doneMsg,doneHearts}, balloonBins:[], queenPhotoBin:null, songBin:null};
+
+    // Save queenPhoto as its own bin if present
+    if(queenPhoto){
+      showLoading('Saving welcome photo… (1/'+(balloons.length+3)+')');
+      index.queenPhotoBin=await createBin({data:queenPhoto},'mds-queen-photo');
+    }
+
+    // Save each balloon as its own bin
+    for(let i=0;i<balloons.length;i++){
+      showLoading(`Saving balloon ${i+1} of ${balloons.length}… 🎈`);
+      const bid=await createBin(balloons[i],`mds-balloon-${i+1}`);
+      index.balloonBins.push(bid);
+    }
+
+    // Save song as its own bin if present
+    if(songData){
+      showLoading('Saving music… 🎵');
+      index.songBin=await createBin({data:songData},'mds-song');
+    }
+
+    // Save the tiny index bin last
+    showLoading('Almost done… ✨');
+    const indexBinId=await createBin(index,'mds-index');
+
+    const shareURL=`${location.href.split('#')[0]}#bin=${indexBinId}`;
+    config={name,badge,sub,queenPhoto,balloons,musicChoice:mcVal,songData,doneTitle,doneMsg,doneHearts};
+    hideLoading();
+    btn.disabled=false;btn.textContent='🔗 Generate Shareable Link';
+    document.getElementById('share-link-input').value=shareURL;
+    document.getElementById('copy-feedback').textContent='';
+    document.getElementById('share-overlay').style.display='flex';
+
+  }catch(e){
+    hideLoading();
+    btn.disabled=false;btn.textContent='🔗 Generate Shareable Link';
+    alert('Could not save the surprise.\n\nError: '+e.message+'\n\nCheck your JSONBin API key and internet connection.');
   }
 }
 
@@ -492,23 +642,18 @@ function addSlot(){
 
 function removeSlot(i){const el=document.getElementById(`slot-${i}`);if(el)el.remove();}
 
-// Store cropped image data keyed by input id
 const croppedImages={};
-
-function previewPhoto(input, previewId){
+function previewPhoto(input,previewId){
   if(input.files&&input.files[0]){
     const r=new FileReader();
     r.onload=e=>{
-      openCropModal(e.target.result, previewId, (croppedData)=>{
-        croppedImages[input.id]=croppedData;
-      });
+      openCropModal(e.target.result,previewId,(croppedData)=>{croppedImages[input.id]=croppedData;});
     };
     r.readAsDataURL(input.files[0]);
   }
 }
 
-/* Resize + compress images aggressively to stay under 100KB total */
-function resizeImage(file,maxW=300,quality=0.45){
+function resizeImage(file,maxW=500,quality=0.55){
   return new Promise(resolve=>{
     const r=new FileReader();
     r.onload=e=>{
@@ -549,94 +694,6 @@ function onSongChosen(input){
   }
 }
 
-/* ── LAUNCH ── */
-async function launchSurprise(){
-  if(JSONBIN_KEY.includes('REPLACEME')){
-    alert('⚠️ Please set up your free JSONBin API key first!\n\n1. Go to https://jsonbin.io and sign up (free)\n2. Go to Account → API Keys → copy your Master Key\n3. Open this HTML file in a text editor\n4. Replace the JSONBIN_KEY value near the top of the <script>\n5. Host the file on GitHub Pages or Netlify Drop\n\nThen it will work!');
-    return;
-  }
-
-  const btn=document.getElementById('launch-btn');
-  const name=document.getElementById('cfg-name').value.trim()||'Maa';
-  const badge=document.getElementById('cfg-badge').value.trim()||"You're a Queen 👑";
-  const sub=document.getElementById('cfg-subtitle').value.trim();
-  const mcVal=document.querySelector('input[name="mc"]:checked').value;
-
-  let queenPhoto=null;
-  const qf=document.getElementById('cfg-photo').files[0];
-  if(qf) queenPhoto=croppedImages['cfg-photo']||await resizeImage(qf,400,0.7);
-
-  // Handle custom song
-  let songData=null;
-  if(mcVal==='custom'){
-    const sf=document.getElementById('cfg-song').files[0];
-    if(sf){
-      if(sf.size>4*1024*1024){
-        alert('⚠️ Song file is too large ('+( sf.size/1024/1024).toFixed(1)+' MB). Please choose a file under 4 MB.');
-        return;
-      }
-      songData=await readAudioFile(sf);
-    } else {
-      alert('Please choose an audio file, or select a different music option.');
-      return;
-    }
-  }
-
-  const balloons=[];
-  for(let i=0;i<slotCount;i++){
-    const msgEl=document.getElementById(`slot-msg-${i}`);
-    const imgEl=document.getElementById(`slot-img-${i}`);
-    if(!msgEl) continue;
-    const msg=msgEl.value.trim();
-    let imgData=null;
-    if(imgEl&&imgEl.files[0]) imgData=croppedImages[`slot-img-${i}`]||await resizeImage(imgEl.files[0],600,0.45);
-    if(msg||imgData) balloons.push({msg,img:imgData,color:color(balloons.length)});
-  }
-
-  if(!balloons.length){alert('Please add at least one balloon message!');return;}
-
-  config={name,badge,sub,queenPhoto,balloons,musicChoice:mcVal,songData};
-
-  // Check payload size — JSONBin free = 100KB max
-  const jsonStr=JSON.stringify(config);
-  const sizeKB=new Blob([jsonStr]).size/1024;
-  if(sizeKB>95){
-    hideLoading();
-    btn.disabled=false;btn.textContent='🔗 Generate Shareable Link';
-    alert(`⚠️ Your data is too large (${sizeKB.toFixed(0)} KB). JSONBin free plan allows 100 KB max.\n\nTips to reduce size:\n• Use fewer photos\n• Use smaller/simpler photos\n• Remove the Mom's photo on the welcome page\n\nTry again after reducing photos!`);
-    return;
-  }
-
-  btn.disabled=true;btn.textContent='⏳ Saving…';
-  showLoading('Saving your surprise…');
-
-  try{
-    const res=await fetch('https://api.jsonbin.io/v3/b',{
-      method:'POST',
-      headers:{
-        'Content-Type':'application/json',
-        'X-Master-Key':JSONBIN_KEY,
-        'X-Bin-Name':'mothers-day-surprise',
-        'X-Bin-Private':'false'
-      },
-      body:JSON.stringify(config)
-    });
-    if(!res.ok){const t=await res.text();throw new Error(t);}
-    const data=await res.json();
-    const binId=data.metadata.id;
-    const shareURL=`${location.href.split('#')[0]}#bin=${binId}`;
-    hideLoading();
-    btn.disabled=false;btn.textContent='🔗 Generate Shareable Link';
-    document.getElementById('share-link-input').value=shareURL;
-    document.getElementById('copy-feedback').textContent='';
-    document.getElementById('share-overlay').style.display='flex';
-  }catch(e){
-    hideLoading();
-    btn.disabled=false;btn.textContent='🔗 Generate Shareable Link';
-    alert('Could not save the surprise.\n\nError: '+e.message+'\n\nMake sure your JSONBin API key is correct and you have internet access.');
-  }
-}
-
 function copyLink(){
   const val=document.getElementById('share-link-input').value;
   navigator.clipboard.writeText(val).then(()=>{
@@ -667,7 +724,10 @@ function buildQueenScreen(){
   document.getElementById('queen-badge-el').textContent=config.badge;
   document.getElementById('queen-subtitle-el').textContent=config.sub;
   document.getElementById('balloon-title-el').textContent=`Pop the balloons, ${config.name}! 🎈`;
-  document.getElementById('done-subtitle-el').textContent=`Thank you for everything, ${config.name}. Love you always 💕`;
+  // Done screen
+  document.getElementById('done-title-el').textContent=config.doneTitle||'All surprises revealed! 🎉';
+  document.getElementById('done-msg-el').textContent=config.doneMsg||`Thank you for everything, ${config.name}. Love you always 💕`;
+  document.getElementById('done-hearts-el').textContent=config.doneHearts||'💖 🌸 💜 🌺 💝';
   const area=document.getElementById('queen-photo-area');
   area.innerHTML=config.queenPhoto
     ?`<img src="${config.queenPhoto}" class="queen-photo-circle" alt="Mom"/>`
