@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>Happy Mother's Day 🌸✨</title>
+<title>Happy Mother's Day 🌸</title>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=Nunito:wght@400;600;700&display=swap" rel="stylesheet"/>
 <style>
 :root{--mint:#d4f5e9;--mint2:#a8e6cf;--green:#2ecc71;--green-dark:#1a9e52}
@@ -116,6 +116,20 @@ body{font-family:'Nunito',sans-serif;background:linear-gradient(135deg,#e8f8f0,#
 .nav-arrow{position:fixed;top:50%;transform:translateY(-50%);width:48px;height:48px;background:rgba(255,255,255,.85);border:none;border-radius:50%;font-size:1.3rem;cursor:pointer;box-shadow:0 4px 16px rgba(0,0,0,.12);z-index:50;display:none;align-items:center;justify-content:center;transition:background .2s;color:#555}
 .nav-arrow:hover{background:white}
 #nav-left{left:12px}#nav-right{right:12px}
+/* IMAGE CROP MODAL */
+#crop-modal{position:fixed;inset:0;background:rgba(0,0,0,.7);display:none;align-items:center;justify-content:center;z-index:500;padding:1rem}
+.crop-card{background:white;border-radius:20px;padding:1.5rem;max-width:400px;width:100%;box-shadow:0 30px 80px rgba(0,0,0,.3)}
+.crop-card h3{font-family:'Playfair Display',serif;color:var(--green-dark);font-size:1.2rem;margin-bottom:1rem;text-align:center}
+.crop-viewport{width:100%;height:260px;border-radius:12px;overflow:hidden;background:#111;position:relative;cursor:grab;border:2px solid var(--mint2);touch-action:none}
+.crop-viewport:active{cursor:grabbing}
+#crop-img{position:absolute;transform-origin:0 0;user-select:none;pointer-events:none}
+.crop-controls{margin-top:1rem}
+.crop-label{font-size:.8rem;font-weight:700;color:#666;margin-bottom:.3rem;display:flex;justify-content:space-between}
+input.crop-slider{width:100%;accent-color:var(--green);cursor:pointer;margin:0}
+.crop-actions{display:flex;gap:.75rem;margin-top:1rem}
+.crop-confirm{flex:1;background:linear-gradient(135deg,var(--green),var(--green-dark));color:white;border:none;border-radius:10px;padding:.7rem;font-family:'Nunito',sans-serif;font-size:.95rem;font-weight:700;cursor:pointer}
+.crop-cancel{background:#f0f0f0;color:#666;border:none;border-radius:10px;padding:.7rem 1rem;font-family:'Nunito',sans-serif;font-size:.95rem;font-weight:700;cursor:pointer}
+.crop-hint{text-align:center;font-size:.75rem;color:#aaa;margin-top:.6rem}
 </style>
 </head>
 <body>
@@ -262,6 +276,141 @@ body{font-family:'Nunito',sans-serif;background:linear-gradient(135deg,#e8f8f0,#
   </div>
 </div>
 
+<!-- CROP MODAL -->
+<div id="crop-modal">
+  <div class="crop-card">
+    <h3>✂️ Adjust your photo</h3>
+    <div class="crop-viewport" id="crop-viewport">
+      <img id="crop-img" alt=""/>
+    </div>
+    <div class="crop-controls">
+      <div class="crop-label"><span>🔍 Zoom</span><span id="zoom-val">100%</span></div>
+      <input type="range" class="crop-slider" id="crop-zoom" min="50" max="300" value="100" oninput="onZoom()"/>
+    </div>
+    <div class="crop-actions">
+      <button class="crop-cancel" onclick="cancelCrop()">✕ Cancel</button>
+      <button class="crop-confirm" onclick="confirmCrop()">✅ Use this photo</button>
+    </div>
+    <div class="crop-hint">Drag to reposition · Slider to zoom</div>
+  </div>
+</div>
+
+<script>
+/* ── CROP / ADJUST MODULE ── */
+let _cropCallback=null,_cropPreviewId=null;
+let _cropScale=1,_cropX=0,_cropY=0;
+let _cropNatW=0,_cropNatH=0,_cropVpW=0,_cropVpH=0;
+let _dragStart=null,_dragOrigin=null;
+let _cropSrcDataUrl=null;
+
+function openCropModal(dataUrl, previewId, callback){
+  _cropCallback=callback;
+  _cropPreviewId=previewId;
+  _cropSrcDataUrl=dataUrl;
+  const img=document.getElementById('crop-img');
+  const vp=document.getElementById('crop-viewport');
+  img.onload=()=>{
+    _cropNatW=img.naturalWidth;_cropNatH=img.naturalHeight;
+    _cropVpW=vp.clientWidth;_cropVpH=vp.clientHeight;
+    // Fit image to viewport initially
+    const fitScale=Math.max(_cropVpW/_cropNatW,_cropVpH/_cropNatH);
+    _cropScale=fitScale;
+    document.getElementById('crop-zoom').value=Math.round(fitScale*100);
+    document.getElementById('zoom-val').textContent=Math.round(fitScale*100)+'%';
+    // Center
+    _cropX=(_cropVpW-_cropNatW*_cropScale)/2;
+    _cropY=(_cropVpH-_cropNatH*_cropScale)/2;
+    applyTransform();
+  };
+  img.src=dataUrl;
+  document.getElementById('crop-modal').style.display='flex';
+  // Drag events
+  const vp2=document.getElementById('crop-viewport');
+  vp2.addEventListener('mousedown',startDrag);
+  vp2.addEventListener('touchstart',startDragTouch,{passive:true});
+}
+
+function applyTransform(){
+  const img=document.getElementById('crop-img');
+  img.style.width=(_cropNatW*_cropScale)+'px';
+  img.style.height=(_cropNatH*_cropScale)+'px';
+  img.style.left=_cropX+'px';
+  img.style.top=_cropY+'px';
+}
+
+function clampPosition(){
+  const iw=_cropNatW*_cropScale,ih=_cropNatH*_cropScale;
+  _cropX=Math.min(0,Math.max(_cropVpW-iw,_cropX));
+  _cropY=Math.min(0,Math.max(_cropVpH-ih,_cropY));
+}
+
+function onZoom(){
+  const z=parseInt(document.getElementById('crop-zoom').value);
+  document.getElementById('zoom-val').textContent=z+'%';
+  const cx=_cropVpW/2,cy=_cropVpH/2;
+  const oldScale=_cropScale;
+  _cropScale=z/100;
+  _cropX=cx-(_cropNatW*_cropScale)*((cx-_cropX)/(_cropNatW*oldScale));
+  _cropY=cy-(_cropNatH*_cropScale)*((cy-_cropY)/(_cropNatH*oldScale));
+  clampPosition();applyTransform();
+}
+
+function startDrag(e){
+  _dragStart={x:e.clientX,y:e.clientY};_dragOrigin={x:_cropX,y:_cropY};
+  window.addEventListener('mousemove',onDrag);window.addEventListener('mouseup',stopDrag);
+}
+function startDragTouch(e){
+  const t=e.touches[0];
+  _dragStart={x:t.clientX,y:t.clientY};_dragOrigin={x:_cropX,y:_cropY};
+  window.addEventListener('touchmove',onDragTouch,{passive:true});
+  window.addEventListener('touchend',stopDragTouch);
+}
+function onDrag(e){
+  if(!_dragStart) return;
+  _cropX=_dragOrigin.x+(e.clientX-_dragStart.x);
+  _cropY=_dragOrigin.y+(e.clientY-_dragStart.y);
+  clampPosition();applyTransform();
+}
+function onDragTouch(e){
+  if(!_dragStart) return;
+  const t=e.touches[0];
+  _cropX=_dragOrigin.x+(t.clientX-_dragStart.x);
+  _cropY=_dragOrigin.y+(t.clientY-_dragStart.y);
+  clampPosition();applyTransform();
+}
+function stopDrag(){_dragStart=null;window.removeEventListener('mousemove',onDrag);window.removeEventListener('mouseup',stopDrag);}
+function stopDragTouch(){_dragStart=null;window.removeEventListener('touchmove',onDragTouch);window.removeEventListener('touchend',stopDragTouch);}
+
+function confirmCrop(){
+  // Draw visible area to canvas
+  const vp=document.getElementById('crop-viewport');
+  const vpW=vp.clientWidth,vpH=vp.clientHeight;
+  const canvas=document.createElement('canvas');
+  canvas.width=vpW;canvas.height=vpH;
+  const ctx=canvas.getContext('2d');
+  const img=document.getElementById('crop-img');
+  ctx.drawImage(img,_cropX,_cropY,_cropNatW*_cropScale,_cropNatH*_cropScale);
+  const result=canvas.toDataURL('image/jpeg',0.72);
+  // Show preview
+  if(_cropPreviewId){
+    const prev=document.getElementById(_cropPreviewId);
+    if(prev){prev.src=result;prev.style.display='block';}
+  }
+  if(_cropCallback) _cropCallback(result);
+  closeCropModal();
+}
+
+function cancelCrop(){closeCropModal();}
+
+function closeCropModal(){
+  document.getElementById('crop-modal').style.display='none';
+  const vp=document.getElementById('crop-viewport');
+  vp.removeEventListener('mousedown',startDrag);
+  vp.removeEventListener('touchstart',startDragTouch);
+  _cropCallback=null;_dragStart=null;
+}
+</script>
+
 <script>
 // ─── JSONBin API key ───────────────────────────────────────────────────────
 // Get your FREE key at https://jsonbin.io → Sign Up → API Keys → Master Key
@@ -343,17 +492,23 @@ function addSlot(){
 
 function removeSlot(i){const el=document.getElementById(`slot-${i}`);if(el)el.remove();}
 
-function previewPhoto(input,previewId){
-  const preview=document.getElementById(previewId);
+// Store cropped image data keyed by input id
+const croppedImages={};
+
+function previewPhoto(input, previewId){
   if(input.files&&input.files[0]){
     const r=new FileReader();
-    r.onload=e=>{preview.src=e.target.result;preview.style.display='block';};
+    r.onload=e=>{
+      openCropModal(e.target.result, previewId, (croppedData)=>{
+        croppedImages[input.id]=croppedData;
+      });
+    };
     r.readAsDataURL(input.files[0]);
   }
 }
 
-/* Resize + compress images to keep payload small */
-function resizeImage(file,maxW=600,quality=0.72){
+/* Resize + compress images aggressively to stay under 100KB total */
+function resizeImage(file,maxW=300,quality=0.45){
   return new Promise(resolve=>{
     const r=new FileReader();
     r.onload=e=>{
@@ -409,7 +564,7 @@ async function launchSurprise(){
 
   let queenPhoto=null;
   const qf=document.getElementById('cfg-photo').files[0];
-  if(qf) queenPhoto=await resizeImage(qf,400,0.7);
+  if(qf) queenPhoto=croppedImages['cfg-photo']||await resizeImage(qf,400,0.7);
 
   // Handle custom song
   let songData=null;
@@ -434,13 +589,24 @@ async function launchSurprise(){
     if(!msgEl) continue;
     const msg=msgEl.value.trim();
     let imgData=null;
-    if(imgEl&&imgEl.files[0]) imgData=await resizeImage(imgEl.files[0],600,0.72);
+    if(imgEl&&imgEl.files[0]) imgData=croppedImages[`slot-img-${i}`]||await resizeImage(imgEl.files[0],600,0.45);
     if(msg||imgData) balloons.push({msg,img:imgData,color:color(balloons.length)});
   }
 
   if(!balloons.length){alert('Please add at least one balloon message!');return;}
 
   config={name,badge,sub,queenPhoto,balloons,musicChoice:mcVal,songData};
+
+  // Check payload size — JSONBin free = 100KB max
+  const jsonStr=JSON.stringify(config);
+  const sizeKB=new Blob([jsonStr]).size/1024;
+  if(sizeKB>95){
+    hideLoading();
+    btn.disabled=false;btn.textContent='🔗 Generate Shareable Link';
+    alert(`⚠️ Your data is too large (${sizeKB.toFixed(0)} KB). JSONBin free plan allows 100 KB max.\n\nTips to reduce size:\n• Use fewer photos\n• Use smaller/simpler photos\n• Remove the Mom's photo on the welcome page\n\nTry again after reducing photos!`);
+    return;
+  }
+
   btn.disabled=true;btn.textContent='⏳ Saving…';
   showLoading('Saving your surprise…');
 
@@ -573,12 +739,30 @@ function playPopSound(){
 /* ── MUSIC ── */
 function initMusic(){
   if(config.musicChoice==='none') return;
+  if(config.musicChoice==='custom'&&config.songData){
+    const audio=new Audio(config.songData);
+    audio.loop=true;audio.volume=0.45;
+    audio.play().catch(()=>{});
+    // store so toggle works
+    window._bgAudio=audio;
+    document.getElementById('music-bar-label').textContent='Your song 🎵';
+    document.getElementById('music-bar').style.display='flex';
+    // override toggle for audio element
+    window._musicIsCustom=true;
+    return;
+  }
+  window._musicIsCustom=false;
   startDefaultMelody();
   document.getElementById('music-bar-label').textContent='Background music';
   document.getElementById('music-bar').style.display='flex';
 }
 function toggleMusic(){
   const btn=document.getElementById('music-toggle');
+  if(window._musicIsCustom&&window._bgAudio){
+    if(musicPaused){window._bgAudio.play();btn.textContent='⏸';musicPaused=false;}
+    else{window._bgAudio.pause();btn.textContent='▶';musicPaused=true;}
+    return;
+  }
   if(!musicPaused){stopDefaultMelody();btn.textContent='▶';musicPaused=true;}
   else{startDefaultMelody();btn.textContent='⏸';musicPaused=false;}
 }
